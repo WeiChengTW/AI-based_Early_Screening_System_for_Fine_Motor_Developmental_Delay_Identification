@@ -1,14 +1,57 @@
 from PaperDetector_edge import PaperDetector_edges
 from BoxDistanceAnalyzer import BoxDistanceAnalyzer
-from px2cm import get_pixel_per_cm_from_a4
 import cv2
 import sys
-import os
-import json
 
 
 def return_score(score):
     sys.exit(int(score))
+
+
+def crop_center_region(image, ratio=0.5):
+    """Crop the center area by width/height ratio (0~1]."""
+    if image is None:
+        return None
+
+    ratio = max(0.01, min(1.0, float(ratio)))
+    h, w = image.shape[:2]
+    crop_w = int(w * ratio)
+    crop_h = int(h * ratio)
+
+    x1 = (w - crop_w) // 2
+    y1 = (h - crop_h) // 2
+    x2 = x1 + crop_w
+    y2 = y1 + crop_h
+    return image[y1:y2, x1:x2]
+
+
+def draw_crop_preview(image, ratio=0.5):
+    """Draw crop rectangle on image for preview."""
+    if image is None:
+        return None
+
+    ratio = max(0.01, min(1.0, float(ratio)))
+    h, w = image.shape[:2]
+    crop_w = int(w * ratio)
+    crop_h = int(h * ratio)
+
+    x1 = (w - crop_w) // 2
+    y1 = (h - crop_h) // 2
+    x2 = x1 + crop_w
+    y2 = y1 + crop_h
+
+    preview = image.copy()
+    cv2.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    cv2.putText(
+        preview,
+        f"Crop: {int(ratio * 100)}%",
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (0, 255, 0),
+        2,
+    )
+    return preview
 
 
 if __name__ == "__main__":
@@ -17,11 +60,19 @@ if __name__ == "__main__":
         # 使用傳入的 uid 和 id 作為圖片路徑
         uid = sys.argv[1]
         img_id = sys.argv[2]
+        try:
+            crop_percent = float(sys.argv[3]) if len(sys.argv) > 3 else 60.0
+        except ValueError:
+            crop_percent = 60.0
+        crop_ratio = max(1.0, min(100.0, crop_percent)) / 100.0
+        score = 0
+        detector_path = None
+        min_dist_cm = None
+        max_dist_cm = None
         # uid = "lull222"
         # img_id = "ch3-t1"
         image_path = rf"kid\{uid}\{img_id}.jpg"
         # image_path = rf"C:\Users\chang\Downloads\web\kid\lull222\ch3-t1.jpg"
-        _, json_path = get_pixel_per_cm_from_a4(rf"ch3-t1\a4_2.jpg", show_debug=False)
         # 提取紙張區域
         print(f"\n正在處理圖片: {image_path}")
         print("====提取紙張區域====")
@@ -31,6 +82,11 @@ if __name__ == "__main__":
 
             region = detector.extract_paper_region()
             if region is not None:
+                preview = draw_crop_preview(region, crop_ratio)
+                if preview is not None:
+                    cv2.imshow("Crop Preview", preview)
+                region = crop_center_region(region, crop_ratio)
+                detector.paper_region = region
                 height, width = region.shape[:2]
                 if width > 600:
                     scale = 600 / width
@@ -42,7 +98,7 @@ if __name__ == "__main__":
                 detector.show_results()
 
             if detector_path:
-            
+
                 result_img, min_dist_cm, max_dist_cm = BoxDistanceAnalyzer(
                     detector_path
                 )
