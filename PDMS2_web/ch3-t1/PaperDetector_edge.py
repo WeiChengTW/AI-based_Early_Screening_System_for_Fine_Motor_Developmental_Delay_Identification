@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import os
 
 
 class PaperDetector_edges:
@@ -147,8 +146,8 @@ class PaperDetector_edges:
     def save_results(self):
         # if self.result is not None:
         #     cv2.imwrite(f"{self.image_path}detected_paper.jpg", self.result)
-        name = self.image_path.split(os.sep)[-1].split(".")[0]
-        result_path = os.path.join("ch3-t1", "extracted", f"{name}_extracted_paper.jpg")
+        name = self.image_path.split("\\")[-1].split(".")[0]
+        result_path = f"ch3-t1\extracted\{name}_extracted_paper.jpg"
         if self.paper_region is not None:
             cv2.imwrite(result_path, self.paper_region)
         print(f"結果已儲存為 '{result_path}'")

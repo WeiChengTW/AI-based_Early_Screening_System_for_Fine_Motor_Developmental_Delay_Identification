@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 from pathlib import Path
+import torch
 from ultralytics import YOLO
 
 
@@ -29,12 +30,16 @@ class PaperDetector_yolo:
         else:
             raise FileNotFoundError(f"Model weights not found: {self.weights_path}")
 
-    def detect_paper_by_yolo(self, conf=0.5, device="0"):
+    def detect_paper_by_yolo(self, conf=0.5, device=None):
         """Detect paper using YOLO model."""
         image = cv2.imread(self.image_path)
         if image is None:
             print("無法讀取圖像檔案")
             return None, None, None
+
+        # Auto-select device to support both CUDA and CPU-only environments.
+        if device is None:
+            device = "0" if torch.cuda.is_available() else "cpu"
 
         # Run YOLO inference
         results = self.model.predict(

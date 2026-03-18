@@ -1,4 +1,4 @@
-from PaperDetector_yolo import PaperDetector_yolo
+from PaperDetector_edge import PaperDetector_edges
 from BoxDistanceAnalyzer import BoxDistanceAnalyzer
 from px2cm import get_pixel_per_cm_from_a4
 import cv2
@@ -19,16 +19,14 @@ if __name__ == "__main__":
         img_id = sys.argv[2]
         # uid = "lull222"
         # img_id = "ch3-t1"
-        image_path = os.path.join("kid", uid, f"{img_id}.jpg")
+        image_path = rf"kid\{uid}\{img_id}.jpg"
         # image_path = rf"C:\Users\chang\Downloads\web\kid\lull222\ch3-t1.jpg"
-        _, json_path = get_pixel_per_cm_from_a4(
-            os.path.join("ch3-t1", "a4_2.jpg"), show_debug=False
-        )
+        _, json_path = get_pixel_per_cm_from_a4(rf"ch3-t1\a4_2.jpg", show_debug=False)
         # 提取紙張區域
         print(f"\n正在處理圖片: {image_path}")
         print("====提取紙張區域====")
-        detector = PaperDetector_yolo(image_path)
-        detector.detect_paper_by_yolo()
+        detector = PaperDetector_edges(image_path)
+        detector.detect_paper_by_color()
         if detector.original is not None:
 
             region = detector.extract_paper_region()
@@ -41,14 +39,14 @@ if __name__ == "__main__":
                     region = cv2.resize(region, (new_width, new_height))
                 # cv2.imshow("提取的紙張區域", region)
                 detector_path = detector.save_results()
-                # 背景任務模式下不要呼叫 show_results()，避免 GUI 阻塞
+                detector.show_results()
 
             if detector_path:
-
+            
                 result_img, min_dist_cm, max_dist_cm = BoxDistanceAnalyzer(
                     detector_path
                 )
-                result_path = os.path.join("kid", uid, f"{img_id}_result.jpg")
+                result_path = rf"kid\{uid}\{img_id}_result.jpg"
                 cv2.imwrite(result_path, result_img)
 
             if min_dist_cm is not None and max_dist_cm is not None:

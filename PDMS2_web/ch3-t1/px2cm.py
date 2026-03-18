@@ -3,10 +3,6 @@
 import cv2
 import numpy as np
 import json
-from pathlib import Path
-
-
-BASE_DIR = Path(__file__).resolve().parent
 
 
 def get_pixel_per_cm_from_a4(image_path, real_width_cm=29.7, show_debug=False):
@@ -44,11 +40,11 @@ def get_pixel_per_cm_from_a4(image_path, real_width_cm=29.7, show_debug=False):
     a4_pixel_width = np.linalg.norm(tr - tl)
     pixel_per_cm = a4_pixel_width / real_width_cm
 
-    json_path = BASE_DIR / "px2cm.json"
+    json_path = "px2cm.json"
     data = {"pixel_per_cm": pixel_per_cm, "image_path": image_path}
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    return pixel_per_cm, str(json_path)
+    return pixel_per_cm, json_path
 
 
 # ✅ 單獨執行這個檔案時顯示紙張輪廓
