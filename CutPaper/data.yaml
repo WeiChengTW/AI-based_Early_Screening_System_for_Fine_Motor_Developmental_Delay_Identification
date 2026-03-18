@@ -1,13 +1,13 @@
-train: train/images
-val: valid/images
-test: test/images
+train: ../train/images
+val: ../valid/images
+test: ../test/images
 
 nc: 1
-names: ["ColorPaper"]
+names: ['ColorPaper']
 
 roboflow:
   workspace: uuriglass
   project: cutpaper
-  version: 1
+  version: 2
   license: CC BY 4.0
-  url: https://universe.roboflow.com/uuriglass/cutpaper/dataset/1
+  url: https://universe.roboflow.com/uuriglass/cutpaper/dataset/2

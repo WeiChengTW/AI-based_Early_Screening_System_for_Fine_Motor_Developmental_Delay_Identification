@@ -31,6 +31,11 @@ def main() -> None:
     if not data_path.exists():
         raise FileNotFoundError(f"Dataset yaml not found: {data_path}")
 
+    # Force project path to be workspace-relative to avoid duplicated runs/train nesting.
+    project_path = Path(args.project)
+    if not project_path.is_absolute():
+        project_path = (root / project_path).resolve()
+
     model = YOLO(args.model)
     model.train(
         data=str(data_path),
@@ -38,7 +43,7 @@ def main() -> None:
         imgsz=args.imgsz,
         batch=args.batch,
         device=args.device,
-        project=args.project,
+        project=str(project_path),
         name=args.name,
     )
 

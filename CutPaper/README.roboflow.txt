@@ -1,8 +1,8 @@
 
-cutpaper - v1 2026-03-18 10:58am
+cutpaper - v2 2026-03-18 11:45am
 ==============================
 
-This dataset was exported via roboflow.com on March 18, 2026 at 2:59 AM GMT
+This dataset was exported via roboflow.com on March 18, 2026 at 3:46 AM GMT
 
 Roboflow is an end-to-end computer vision platform that helps you
 * collaborate with your team on computer vision projects
@@ -22,7 +22,6 @@ Paper are annotated in YOLOv8 format.
 
 The following pre-processing was applied to each image:
 * Auto-orientation of pixel data (with EXIF-orientation stripping)
-* Resize to 432x432 (Fill (with center crop))
 
 The following augmentation was applied to create 3 versions of each source image:
 * 50% probability of horizontal flip
