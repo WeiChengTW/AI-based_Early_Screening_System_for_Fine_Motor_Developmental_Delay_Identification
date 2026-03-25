@@ -1,27 +1,12 @@
 import cv2
 import numpy as np
 import os
+from pathlib import Path
+import torch
+from ultralytics import YOLO
 
 
-def BoxDistanceAnalyzer(img_path=None, output_path=None):
-    if output_path is None:
-        output_path = os.path.join("ch3-t1", "result")
-    img = cv2.imread(img_path)
-    if img is None:
-        print("讀取圖片失敗，請確認檔案路徑正確！")
-        return
-
-    # 先偵測最大輪廓並畫黃線
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (3, 3), 0)
-    edged = cv2.Canny(blur, 20, 100)
-    # cv2.imshow("edges", edged)
-    contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if contours:
-        max_contour = max(contours, key=cv2.contourArea)
-        cv2.drawContours(img, [max_contour], -1, (0, 255, 255), 1)  # 黃色線
-
-    # 偵測 ArUco marker
+def _detect_aruco_center_and_scale(img):
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     parameters = cv2.aruco.DetectorParameters()
     detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
@@ -30,70 +15,147 @@ def BoxDistanceAnalyzer(img_path=None, output_path=None):
     if ids is None or len(ids) == 0:
         raise ValueError("找不到 ArUco marker")
 
-    # ArUco 實際邊長（公分）
+    pts = corners[0][0]  # 取第一個 marker
+    side_lengths = [np.linalg.norm(pts[i] - pts[(i + 1) % 4]) for i in range(4)]
+    avg_side_px = np.mean(side_lengths)
     aruco_length_cm = 2.0
-    if corners:
-        # 對每個 ArUco 畫圓並計算中心到黃色邊框的最短最長距離
-        for marker_corners in corners:
-            pts = marker_corners[0]  # shape: (4,2)
-            # 計算四邊長度
-            side_lengths = [np.linalg.norm(pts[i] - pts[(i + 1) % 4]) for i in range(4)]
-            avg_side_px = np.mean(side_lengths)
-            pixel_per_cm = avg_side_px / aruco_length_cm
-            # 中心點
-            center_x = int(np.mean(pts[:, 0]))
-            center_y = int(np.mean(pts[:, 1]))
-            center = np.array([center_x, center_y])
+    pixel_per_cm = avg_side_px / aruco_length_cm
+    center_x = int(np.mean(pts[:, 0]))
+    center_y = int(np.mean(pts[:, 1]))
 
-            # 計算中心點到黃色邊框(最大輪廓)的所有點的距離
-            contour_points = max_contour.reshape(-1, 2)
-            dists = np.linalg.norm(contour_points - center, axis=1)
-            min_idx = np.argmin(dists)
-            max_idx = np.argmax(dists)
-            min_dist = dists[min_idx]
-            max_dist = dists[max_idx]
-            min_dist_cm = min_dist / pixel_per_cm
-            max_dist_cm = max_dist / pixel_per_cm
+    return (center_x, center_y), pixel_per_cm
 
-            # 畫最短線（紅色）
-            min_point = tuple(contour_points[min_idx])
-            cv2.line(img, (center_x, center_y), min_point, (0, 0, 255), 2)
-            # 畫最長線（藍色）
-            max_point = tuple(contour_points[max_idx])
-            cv2.line(img, (center_x, center_y), max_point, (255, 0, 0), 2)
 
-            # 左上角顯示距離（紅字、藍字）
-            cv2.putText(
-                img,
-                f"min: {min_dist_cm:.2f}cm",
-                (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (0, 0, 255),
-                2,
-            )
-            cv2.putText(
-                img,
-                f"max: {max_dist_cm:.2f}cm",
-                (10, 65),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (255, 0, 0),
-                2,
-            )
+def _get_object_mask_contour_points(img, conf=0.85, device=None):
+    model_path = Path(__file__).resolve().parent / "models" / "best.pt"
+    if not model_path.exists():
+        raise FileNotFoundError(f"找不到模型權重: {model_path}")
 
-            name = img_path.split(os.sep)[-1].split("_")[0]
-            path = f"{output_path}/{name}.png"
-            cv2.imwrite(path, img)
+    model = YOLO(str(model_path))
+    if device is None:
+        device = "0" if torch.cuda.is_available() else "cpu"
 
-        print(f"結果已儲存為 '{path}'")
-        print(
-            f"ArUco中心到黃色邊框\n最短距離: {min_dist_cm:.2f}cm, 最長距離: {max_dist_cm:.2f}cm"
+    names = model.names if model is not None else {}
+    object_class_ids = [
+        int(cls_id)
+        for cls_id, cls_name in names.items()
+        if "object" in str(cls_name).lower()
+    ]
+    if not object_class_ids:
+        raise ValueError("模型類別中找不到 object")
+
+    predict_kwargs = {
+        "source": img,
+        "conf": conf,
+        "device": device,
+        "verbose": False,
+        "classes": object_class_ids,
+    }
+
+    try:
+        results = model.predict(**predict_kwargs)
+    except Exception as e:
+        if device != "cpu" and "cuda" in str(e).lower():
+            predict_kwargs["device"] = "cpu"
+            results = model.predict(**predict_kwargs)
+        else:
+            raise
+
+    if len(results) == 0:
+        raise ValueError("YOLO 沒有輸出結果")
+
+    result = results[0]
+    if result.masks is None or len(result.masks.data) == 0:
+        raise ValueError("YOLO 沒有偵測到 object mask")
+
+    if result.boxes is None or len(result.boxes) == 0:
+        raise ValueError("YOLO 沒有偵測到 object 邊界框")
+
+    max_conf_idx = int(np.argmax(result.boxes.conf.cpu().numpy()))
+    mask = result.masks.data[max_conf_idx].cpu().numpy()
+    mask = (mask > 0.5).astype(np.uint8) * 255
+
+    if mask.shape[:2] != img.shape[:2]:
+        mask = cv2.resize(
+            mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST
         )
-        return img, min_dist_cm, max_dist_cm
-    else:
-        print("未偵測到任何 ArUco marker")
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        raise ValueError("object mask 找不到輪廓")
+
+    contour_points = np.vstack([c.reshape(-1, 2) for c in contours])
+    return contour_points
+
+
+def BoxDistanceAnalyzer(
+    img_path=None,
+    output_path=None,
+    contour_points=None,
+    largest_contour_points=None,
+):
+    if output_path is None:
+        output_path = os.path.join("ch3-t1", "result")
+    os.makedirs(output_path, exist_ok=True)
+
+    img = cv2.imread(img_path)
+    if img is None:
+        print("讀取圖片失敗，請確認檔案路徑正確！")
         return
+
+    (center_x, center_y), pixel_per_cm = _detect_aruco_center_and_scale(img)
+    if contour_points is None:
+        contour_points = _get_object_mask_contour_points(img)
+
+    center = np.array([center_x, center_y])
+    dists = np.linalg.norm(contour_points - center, axis=1)
+    min_idx = int(np.argmin(dists))
+    max_idx = int(np.argmax(dists))
+    min_dist = dists[min_idx]
+    max_dist = dists[max_idx]
+    min_dist_cm = min_dist / pixel_per_cm
+    max_dist_cm = max_dist / pixel_per_cm
+
+    if largest_contour_points is not None:
+        contour_for_draw = largest_contour_points.reshape(-1, 1, 2).astype(np.int32)
+    else:
+        contour_for_draw = contour_points.reshape(-1, 1, 2).astype(np.int32)
+    cv2.drawContours(img, [contour_for_draw], -1, (0, 255, 255), 1)
+    cv2.circle(img, (center_x, center_y), 5, (0, 255, 0), -1)
+
+    min_point = tuple(contour_points[min_idx])
+    max_point = tuple(contour_points[max_idx])
+    cv2.line(img, (center_x, center_y), min_point, (0, 0, 255), 2)
+    cv2.line(img, (center_x, center_y), max_point, (255, 0, 0), 2)
+
+    cv2.putText(
+        img,
+        f"min: {min_dist_cm:.2f}cm",
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (0, 0, 255),
+        2,
+    )
+    cv2.putText(
+        img,
+        f"max: {max_dist_cm:.2f}cm",
+        (10, 65),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (255, 0, 0),
+        2,
+    )
+
+    name = img_path.split(os.sep)[-1].split("_")[0]
+    path = f"{output_path}/{name}.png"
+    cv2.imwrite(path, img)
+
+    print(f"結果已儲存為 '{path}'")
+    print(
+        f"ArUco中心到object mask輪廓\n最短距離: {min_dist_cm:.2f}cm, 最長距離: {max_dist_cm:.2f}cm"
+    )
+    return img, min_dist_cm, max_dist_cm
 
 
 if __name__ == "__main__":

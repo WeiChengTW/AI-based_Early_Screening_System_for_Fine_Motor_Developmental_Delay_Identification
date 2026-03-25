@@ -52,12 +52,7 @@ if __name__ == "__main__":
             if region is not None:
                 detector_path = detector.save_results()
 
-        print("====使用 object mask + ArUco 紅框評分====")
-        if detector_path:
-            if detector.object_mask_points_warped is None:
-                print("原圖未偵測到 object mask，無法進行方形評分")
-                detector_path = None
-
+        print("====使用原本方形評分邏輯====")
         if detector_path:
             draw_result = Draw_square(detector_path)
             if draw_result is not None:
@@ -66,8 +61,6 @@ if __name__ == "__main__":
                     analyzer = BoxDistanceAnalyzer(
                         box1=black_corners_int,
                         image_path=detector_path,
-                        mask_points=detector.object_mask_points_warped,
-                        largest_mask_contour=detector.object_mask_largest_contour_warped,
                     )
                     result = analyzer.analyze(pixel_per_cm=pixel_per_cm)
                     if result is not None:

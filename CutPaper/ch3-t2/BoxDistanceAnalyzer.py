@@ -2,130 +2,42 @@ import cv2
 import numpy as np
 import os
 from Draw_square import Draw_square
-from pathlib import Path
-import torch
-from ultralytics import YOLO
 
 
 class BoxDistanceAnalyzer:
-    def __init__(
-        self,
-        box1=None,
-        image_path=None,
-        mask_points=None,
-        largest_mask_contour=None,
-    ):
+    def __init__(self, box1=None, image_path=None):
         self.box1 = box1
         self.image_path = image_path
         self.box2 = None
-        self.model_path = (
-            Path(__file__).resolve().parents[1] / "ch3-t1" / "models" / "best.pt"
-        )
-        self._mask_points_cache = mask_points
-        self._largest_mask_contour_cache = largest_mask_contour
-
-    def _load_object_mask_contours(self, image_path, device=None):
-        if (
-            self._mask_points_cache is not None
-            and self._largest_mask_contour_cache is not None
-        ):
-            return self._mask_points_cache, self._largest_mask_contour_cache
-
-        img = cv2.imread(image_path)
-        if img is None:
-            print(f"無法讀取圖片: {image_path}")
-            return None, None
-
-        if not self.model_path.exists():
-            print(f"找不到模型權重: {self.model_path}")
-            return None, None
-
-        model = YOLO(str(self.model_path))
-        if device is None:
-            device = "0" if torch.cuda.is_available() else "cpu"
-
-        names = model.names if model is not None else {}
-        object_class_ids = [
-            int(cls_id)
-            for cls_id, cls_name in names.items()
-            if "object" in str(cls_name).lower()
-        ]
-        if not object_class_ids:
-            print("模型類別中找不到 object")
-            return None, None
-
-        result = None
-        selected_conf = None
-        conf_candidates = [0.85]
-        for conf in conf_candidates:
-            predict_kwargs = {
-                "source": img,
-                "conf": conf,
-                "device": device,
-                "verbose": False,
-                "classes": object_class_ids,
-            }
-
-            try:
-                results = model.predict(**predict_kwargs)
-            except Exception as e:
-                if device != "cpu" and "cuda" in str(e).lower():
-                    predict_kwargs["device"] = "cpu"
-                    results = model.predict(**predict_kwargs)
-                else:
-                    print(f"YOLO 推論失敗: {e}")
-                    return None, None
-
-            if len(results) == 0:
-                continue
-
-            candidate = results[0]
-            if candidate.boxes is None or len(candidate.boxes) == 0:
-                continue
-            if candidate.masks is None or len(candidate.masks.data) == 0:
-                continue
-
-            result = candidate
-            selected_conf = conf
-            break
-
-        if result is None:
-            print("YOLO 沒有偵測到 object mask")
-            return None, None
-
-        print(f"object mask 偵測門檻使用 conf={selected_conf}")
-
-        max_conf_idx = int(np.argmax(result.boxes.conf.cpu().numpy()))
-        mask = result.masks.data[max_conf_idx].cpu().numpy()
-        mask = (mask > 0.5).astype(np.uint8) * 255
-        if mask.shape[:2] != img.shape[:2]:
-            mask = cv2.resize(
-                mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST
-            )
-
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        if not contours:
-            print("object mask 找不到輪廓")
-            return None, None
-
-        largest = max(contours, key=cv2.contourArea)
-        points = np.vstack([c.reshape(-1, 2) for c in contours])
-        self._mask_points_cache = points
-        self._largest_mask_contour_cache = largest.reshape(-1, 2)
-        return self._mask_points_cache, self._largest_mask_contour_cache
 
     def detect_main_contour_points(self, image_path, show_debug=False):
         """
-        取得 YOLO object mask 的輪廓點
+        只取來自面積大於1000的輪廓的邊緣點
         """
-        points, _ = self._load_object_mask_contours(image_path)
-        if points is None:
+        img = cv2.imread(image_path)
+        if img is None:
+            print(f"無法讀取圖片: {image_path}")
             return None
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+        edges = cv2.Canny(blurred, 20, 100, apertureSize=3)
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        points = []
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < 3000:
+                continue
+            contour_points = contour.reshape(-1, 2)
+            points.append(contour_points)
+        if points:
+            points = np.concatenate(points, axis=0)
+        else:
+            points = np.empty((0, 2), dtype=int)
 
         if show_debug:
-            img = cv2.imread(image_path)
-            if img is None:
-                return points
             debug_image = img.copy()
             for pt in points:
                 cv2.circle(debug_image, tuple(pt), 1, (0, 255, 255), 1)
@@ -136,8 +48,29 @@ class BoxDistanceAnalyzer:
 
     def detect_largest_contour(self, image_path, area_threshold=3000):
         """回傳最大外部輪廓的有序點集 (N,2)；若無則回傳 None。"""
-        _, largest = self._load_object_mask_contours(image_path)
-        return largest
+        img = cv2.imread(image_path)
+        if img is None:
+            return None
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+        edges = cv2.Canny(blurred, 20, 100, apertureSize=3)
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours:
+            return None
+        # 取面積最大且超過門檻者
+        largest = None
+        largest_area = 0.0
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area > area_threshold and area > largest_area:
+                largest = c
+                largest_area = area
+        if largest is None:
+            return None
+        return largest.reshape(-1, 2)
 
     @staticmethod
     def _closest_point_on_segment(p, a, b):

@@ -125,8 +125,11 @@ class PaperDetector_edges:
         #     cv2.imwrite(f"{self.image_path}detected_paper.jpg", self.result)
         name = self.image_path.split(os.sep)[-1].split(".")[0]
         result_path = os.path.join("ch3-t2", "extracted", f"{name}_extracted_paper.jpg")
+        os.makedirs(os.path.dirname(result_path), exist_ok=True)
         if self.paper_region is not None:
-            cv2.imwrite(result_path, self.paper_region)
+            ok = cv2.imwrite(result_path, self.paper_region)
+            if not ok:
+                raise IOError(f"無法寫入檔案: {result_path}")
         print(f"結果已儲存為 '{result_path}'")
         return result_path
 

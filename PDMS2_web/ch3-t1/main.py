@@ -37,6 +37,11 @@ if __name__ == "__main__":
         detector = PaperDetector_yolo(image_path)
         detector.detect_paper_by_yolo()
 
+        if detector.result is not None:
+            detected_path = os.path.join("kid", uid, f"{img_id}_detected.jpg")
+            cv2.imwrite(detected_path, detector.result)
+            print(f"偵測框圖片已儲存: {detected_path}")
+
         if detector.original is not None:
             region = detector.extract_paper_region()
             if region is not None:
@@ -44,12 +49,19 @@ if __name__ == "__main__":
 
         print("====再用裁切後圖片進行評分====")
         if detector_path:
-            result = BoxDistanceAnalyzer(detector_path)
-            if result is not None:
-                result_img, min_dist_cm, max_dist_cm = result
-                if result_img is not None:
-                    result_path = os.path.join("kid", uid, f"{img_id}_result.jpg")
-                    cv2.imwrite(result_path, result_img)
+            if detector.object_mask_points_warped is None:
+                print("原圖未偵測到 object mask，無法進行距離評分")
+            else:
+                result = BoxDistanceAnalyzer(
+                    detector_path,
+                    contour_points=detector.object_mask_points_warped,
+                    largest_contour_points=detector.object_mask_largest_contour_warped,
+                )
+                if result is not None:
+                    result_img, min_dist_cm, max_dist_cm = result
+                    if result_img is not None:
+                        result_path = os.path.join("kid", uid, f"{img_id}_result.jpg")
+                        cv2.imwrite(result_path, result_img)
 
         if min_dist_cm is not None and max_dist_cm is not None:
             correct = 4.0
