@@ -33,6 +33,9 @@
 # 不要把模型檔 (.h5) 放進 Git
 *.h5
 
+# 不要把 YOLO 權重 best.pt 放進 Git
+best.pt
+
 # 各關卡的 model 資料夾也全部忽略
 PDMS2_web/ch2-t1/model/
 PDMS2_web/ch2-t2/model/
