@@ -1,11 +1,13 @@
 <!doctype html>
 <html lang="zh-Hant">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>測驗管理 | 兒童測驗平台</title>
   <link rel="stylesheet" href="../css/admin.css">
 </head>
+
 <body>
   <div class="header">
     <div class="brand">兒童發展測驗平台</div>
@@ -40,10 +42,13 @@
             <th>測驗項目</th>
             <th>獲得分數</th>
             <th>測驗日期</th>
+            <th>圖片檢視</th>
           </tr>
         </thead>
         <tbody data-role="tbody">
-          <tr><td colspan="6" class="empty">系統資料載入中，請稍候...</td></tr>
+          <tr>
+            <td colspan="7" class="empty">系統資料載入中，請稍候...</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -76,7 +81,8 @@
           <input type="date" data-field="test_date">
         </div>
         <div class="form-group">
-          <label>測驗分數：<span id="score-display" style="font-weight:700; color:var(--secondary); font-size:18px;">0</span> 分</label>
+          <label>測驗分數：<span id="score-display" style="font-weight:700; color:var(--secondary); font-size:18px;">0</span>
+            分</label>
           <input type="range" data-field="score" min="0" max="2" value="0">
         </div>
       </div>
@@ -89,4 +95,5 @@
 
   <script src="../js/admin.js"></script>
 </body>
+
 </html>

@@ -100,7 +100,7 @@
     );
 
     if (filtered.length === 0) {
-      $tbody.innerHTML = '<tr><td colspan="6" class="empty">目前沒有符合條件的測驗紀錄</td></tr>';
+      $tbody.innerHTML = '<tr><td colspan="7" class="empty">目前沒有符合條件的測驗紀錄</td></tr>';
       return;
     }
     
@@ -112,6 +112,12 @@
            </div>` 
         : '<span style="color:#CCC;">無操作權限</span>';
         
+      const imgCell = (r.compare_url || r.result_img_url)
+        ? `<div style="display:flex; align-items:center; gap:8px;">
+             <a href="${r.compare_url || r.result_img_url}" target="_blank" class="btn btn-sm" style="text-decoration:none;">檢視</a>
+           </div>`
+        : '<span style="color:#CCC;">無圖片</span>';
+
       return `
         <tr data-key="${r.row_key}">
           <td>${opTd}</td>
@@ -120,6 +126,7 @@
           <td>${r.task_id || ''}</td>
           <td style="font-weight:700; color:#48CAE4;">${r.score ?? ''}</td>
           <td style="color:var(--text-muted);">${r.test_date ?? ''}</td>
+          <td>${imgCell}</td>
         </tr>`;
     }).join('');
   }
