@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import re
+import hmac
+import hashlib
 from pathlib import Path
 from datetime import date, datetime
 
@@ -14,16 +16,17 @@ DATA_ROOT = BASE_DIR / "PDMS2"
 UID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 FILE_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+IMAGE_SIGN_SECRET = "pdms2-temp-sign-secret-20260325"
 
 app = Flask(__name__, static_folder="public", static_url_path="")
 app.secret_key = os.environ.get("WEB_SECRET_KEY", "dev-only-secret-change-me")
 
 DB = dict(
-    host="13.238.239.23",
+    host="100.117.109.112",
     port=3306,
-    user="project",
-    password="project",
-    database="pdms2",
+    user="yplab",
+    password="brain0918",
+    database="testPDMS",
     charset="utf8mb4",
     cursorclass=pymysql.cursors.DictCursor,
     autocommit=True,
@@ -93,6 +96,20 @@ def can_access_uid(uid: str) -> bool:
     if level == 1:
         return uid == user_allowed_uid(user)
     return True
+
+
+def sign_image(uid: str, filename: str) -> str:
+    payload = f"{uid}/{filename}".encode("utf-8")
+    return hmac.new(
+        IMAGE_SIGN_SECRET.encode("utf-8"), payload, hashlib.sha256
+    ).hexdigest()
+
+
+def is_valid_signature(uid: str, filename: str, sig: str) -> bool:
+    if not sig:
+        return False
+    expected = sign_image(uid, filename)
+    return hmac.compare_digest(expected, sig)
 
 
 def require_login() -> tuple[bool, object | None]:
@@ -218,14 +235,8 @@ def get_images() -> object:
 
 @app.get("/images/<uid>/<filename>")
 def get_image(uid: str, filename: str) -> object:
-    ok, resp = require_login()
-    if not ok:
-        return resp
-
     if not is_valid_uid(uid) or not is_valid_filename(filename):
         return "Bad request.", 400
-    if not can_access_uid(uid):
-        return "Forbidden", 403
 
     if get_extension(filename) not in ALLOWED_EXTENSIONS:
         return "Only image files are allowed.", 400
@@ -236,6 +247,15 @@ def get_image(uid: str, filename: str) -> object:
 
     if not absolute_path.exists() or not absolute_path.is_file():
         return "Image not found.", 404
+
+    signed_ok = is_valid_signature(
+        uid, filename, str(request.args.get("sig", "")).strip()
+    )
+    session_ok = bool(current_user()) and can_access_uid(uid)
+    if not signed_ok and not session_ok:
+        if current_user():
+            return "Forbidden", 403
+        return "Unauthorized", 401
 
     return send_file(absolute_path)
 

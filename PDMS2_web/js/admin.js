@@ -190,9 +190,9 @@
 
     $tbody.innerHTML = displayRows.map(r => {
       let imgCell = '<span class="muted" style="color:#ccc">無圖片</span>';
-      if (r.result_img_path) {
-          let thumbSrc = r.result_img_path;
-          if (!thumbSrc.startsWith('/')) thumbSrc = '/' + thumbSrc;
+      if (r.result_img_url || r.result_img_path) {
+          let thumbSrc = r.result_img_url || r.result_img_path;
+          if (!thumbSrc.startsWith('/') && !thumbSrc.startsWith('http://') && !thumbSrc.startsWith('https://')) thumbSrc = '/' + thumbSrc;
           const linkUrl = r.compare_url || thumbSrc;
           imgCell = `
             <div style="display:flex; align-items:center; gap:10px;">
