@@ -1,26 +1,63 @@
-2025-12-13 11:15:05 - INFO - === 遠端 PyMySQL 模式 ===
-2025-12-13 11:15:05 - INFO - Flask 應用程式啟動
-2025-12-13 11:15:05 - INFO - 準備啟動 Flask 應用程式，HOST=127.0.0.1, PORT=8000
-2025-12-13 11:15:05 - INFO - 已設定瀏覽器自動開啟
-2025-12-13 11:15:05 - INFO - Flask 應用程式開始運行
-2025-12-13 11:15:11 - INFO - [REQ] POST /create-uid-folder
-2025-12-13 11:15:11 - INFO - [REQ] 進入 create_uid_folder
-2025-12-13 11:15:13 - INFO - [RESP] POST /create-uid-folder -> 200
-2025-12-13 11:15:27 - INFO - 相機開啟成功，來源: 0，原始尺寸: 1280x720，裁切後: 1024x576
-2025-12-13 11:15:32 - INFO - [相機] 相機已釋放
-2025-12-13 11:15:35 - INFO - 相機開啟成功，來源: 0，原始尺寸: 1280x720，裁切後: 1024x576
-2025-12-13 11:15:35 - INFO - 圖像存儲成功: D:\Peabody-Developmental-Motor-Scales - copy\PDMS2_web\kid\A123456789\ch3-t2.jpg
-2025-12-13 11:15:35 - INFO - [REQ] POST /run-python
-2025-12-13 11:15:35 - INFO - 開始背景任務 53e07241-6df3-4abc-bf25-7db022e6e5a9: uid=A123456789, task=ch3-t2
-2025-12-13 11:15:35 - INFO - 執行命令：C:\Users\呂昊宸\AppData\Local\Programs\Python\Python312\python.exe D:\Peabody-Developmental-Motor-Scales - copy\PDMS2_web\ch3-t2\main.py A123456789 ch3-t2
-2025-12-13 11:15:35 - INFO - [RESP] POST /run-python -> 200
-2025-12-13 11:15:35 - INFO - 腳本輸出 (任務 53e07241-6df3-4abc-bf25-7db022e6e5a9)：
+2026-03-25 15:09:43 - INFO - == Flask Starting ! == 
+2026-03-25 15:09:43 - INFO - 準備啟動 Flask 應用程式，HOST=127.0.0.1, PORT=8000
+2026-03-25 15:09:43 - INFO - 已設定瀏覽器自動開啟
+2026-03-25 15:09:43 - INFO - Flask 應用程式開始運行
+2026-03-25 15:09:49 - INFO - 建立UID為test1的資料夾
+2026-03-25 15:09:49 - INFO - 建立UID為test1的資料夾
+2026-03-25 15:09:54 - INFO - 開始背景任務 57e4e11b-c232-4b58-afcf-da7503da8b19: uid=test1, task=ch3-t1
+2026-03-25 15:09:54 - INFO - 執行命令：/Users/william/AI-based_Early_Screening_System_for_Fine_Motor_Developmental_Delay_Identification/.venv39/bin/python /Users/william/AI-based_Early_Screening_System_for_Fine_Motor_Developmental_Delay_Identification/PDMS2_web/ch3-t1/main.py test1 ch3-t1
+2026-03-25 15:09:56 - INFO - 腳本輸出 (任務 57e4e11b-c232-4b58-afcf-da7503da8b19)：
 
-正在處理圖片: kid\A123456789\ch3-t2.jpg
-====提取紙張區域====
-未檢測到明顯的紙張區域
-無法提取紙張區域
+正在處理圖片: kid/test1/ch3-t1.jpg
+====先用模型裁切 paper 區域====
+檢測到紙張類別 'paper'，置信度: 0.96
+檢測到 object mask，置信度: 0.96
+偵測框圖片已儲存: kid/test1/ch3-t1_detected.jpg
+結果已儲存為 'ch3-t1/extracted/ch3-t1_extracted_paper.jpg'
+====再用裁切後圖片進行評分====
+結果已儲存為 'ch3-t1/result/ch3-t1.png'
+ArUco中心到object mask輪廓
+最短距離: 3.57cm, 最長距離: 4.42cm
+kid = 0.43, score = 2
 
-2025-12-13 11:15:40 - INFO - [DB] ensure_task ok: Ch3-t2 -> cut_square
-2025-12-13 11:15:41 - INFO - [DB] insert_score ok: uid=A123456789, task_id=Ch3-t2, date=2025-12-13, time=11:15:35
-2025-12-13 11:15:43 - INFO - 任務 53e07241-6df3-4abc-bf25-7db022e6e5a9 完成：score=0
+2026-03-25 15:09:56 - INFO - [DB] insert_score ok: uid=test1, task_id=Ch3-t1, date=2026-03-25
+2026-03-25 15:09:56 - INFO - [UPLOAD] 任務完成後開始上傳: task=ch3-t1, uid=test1
+2026-03-25 15:09:56 - INFO - [UPLOAD][stdout]
+[UPLOAD] 原始圖 -> /Users/yplab/Desktop/PDMS/test1/ch3-t1.jpg
+[UPLOAD] 結果圖 -> /Users/yplab/Desktop/PDMS/test1/ch3-t1_result.jpg
+
+2026-03-25 15:09:56 - INFO - [UPLOAD] 上傳成功: uid=test1, img_id=ch3-t1
+2026-03-25 15:09:56 - INFO - [UPLOAD] 任務上傳結果: task=ch3-t1, uid=test1, success=True
+2026-03-25 15:09:56 - INFO - 任務 57e4e11b-c232-4b58-afcf-da7503da8b19 完成：score=2
+2026-03-25 15:09:56 - INFO - 開始背景任務 3741b2a0-d749-434a-a705-9035be25643c: uid=test1, task=ch3-t2
+2026-03-25 15:09:56 - INFO - 執行命令：/Users/william/AI-based_Early_Screening_System_for_Fine_Motor_Developmental_Delay_Identification/.venv39/bin/python /Users/william/AI-based_Early_Screening_System_for_Fine_Motor_Developmental_Delay_Identification/PDMS2_web/ch3-t2/main.py test1 ch3-t2
+2026-03-25 15:09:57 - INFO - 腳本輸出 (任務 3741b2a0-d749-434a-a705-9035be25643c)：
+
+正在處理圖片: kid/test1/ch3-t2.jpg
+====使用 YOLO 提取紙張區域====
+檢測到紙張類別 'paper'，置信度: 0.97
+檢測到 object mask，置信度: 0.93
+偵測框圖片已儲存: kid/test1/ch3-t2_detected.jpg
+結果已儲存為 'ch3-t2/extracted/ch3-t2_extracted_paper.jpg'
+====使用 object mask + ArUco 紅框評分====
+黑框四角座標：
+Corner 1: x=22.8, y=96.0
+Corner 2: x=78.8, y=48.0
+Corner 3: x=126.8, y=104.0
+Corner 4: x=70.8, y=152.0
+結果已儲存為 'ch3-t2/Draw_square/ch3-t2.png'
+內凹方向的最大最短距離: 0.81
+紅框四角到黃框線之最短的最長距離: 1.14
+最長距離線段與方框、最大輪廓邊緣已畫出並存檔於 ch3-t2/result/ch3-t2_max_dist.png
+kid = 1.14, score = 1
+
+2026-03-25 15:09:58 - INFO - [DB] insert_score ok: uid=test1, task_id=Ch3-t2, date=2026-03-25
+2026-03-25 15:09:58 - INFO - [UPLOAD] 任務完成後開始上傳: task=ch3-t2, uid=test1
+2026-03-25 15:09:58 - INFO - [UPLOAD][stdout]
+[UPLOAD] 原始圖 -> /Users/yplab/Desktop/PDMS/test1/ch3-t2.jpg
+[UPLOAD] 結果圖 -> /Users/yplab/Desktop/PDMS/test1/ch3-t2_result.jpg
+
+2026-03-25 15:09:58 - INFO - [UPLOAD] 上傳成功: uid=test1, img_id=ch3-t2
+2026-03-25 15:09:58 - INFO - [UPLOAD] 任務上傳結果: task=ch3-t2, uid=test1, success=True
+2026-03-25 15:09:58 - INFO - 任務 3741b2a0-d749-434a-a705-9035be25643c 完成：score=1
+2026-03-25 15:10:15 - INFO - Flask 應用程式已關閉
