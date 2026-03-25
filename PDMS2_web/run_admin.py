@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import secrets
+import base64
 import hashlib
 import hmac
 import threading
@@ -13,7 +14,7 @@ from datetime import datetime, date
 from urllib.parse import urlencode, urlparse
 
 import pymysql
-from flask import Flask, send_from_directory, request, jsonify, session
+from flask import Flask, send_from_directory, request, jsonify, session, Response
 from flask_cors import CORS
 
 # =========================
@@ -260,6 +261,13 @@ def js_files(filename):
 @app.route("/images/<path:filename>")
 def images_files(filename):
     return send_from_directory(ROOT / "images", filename)
+
+
+@app.route("/images/no_image.png")
+def no_image_placeholder():
+    tiny_gif_base64 = "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+    tiny_gif = base64.b64decode(tiny_gif_base64)
+    return Response(tiny_gif, mimetype="image/gif")
 
 
 @app.route("/kid/<path:relpath>")

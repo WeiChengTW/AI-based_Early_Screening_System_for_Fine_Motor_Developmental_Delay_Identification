@@ -12,7 +12,25 @@ from flask import Flask, jsonify, request, send_file, session
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_ROOT = BASE_DIR / "PDMS2"
+
+
+def _resolve_data_root() -> Path:
+    env_root = os.environ.get("PDMS_DATA_ROOT", "").strip()
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+
+    default_root = (BASE_DIR / "PDMS2").resolve()
+    if default_root.exists():
+        return default_root
+
+    fallback_root = Path("/Users/yplab/Desktop/PDMS")
+    if fallback_root.exists():
+        return fallback_root.resolve()
+
+    return default_root
+
+
+DATA_ROOT = _resolve_data_root()
 UID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 FILE_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
@@ -277,4 +295,5 @@ def get_image(uid: str, filename: str) -> object:
 
 
 if __name__ == "__main__":
+    print(f"[MacWeb] DATA_ROOT = {DATA_ROOT}")
     app.run(host="0.0.0.0", port=3000, debug=True)
