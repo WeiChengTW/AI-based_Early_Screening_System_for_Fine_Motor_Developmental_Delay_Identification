@@ -37,3 +37,6 @@
 PDMS2_web/ch2-t1/model/
 PDMS2_web/ch2-t2/model/
 PDMS2_web/ch2-t3/model/
+
+# 忽略虛擬環境資料夾
+.venv39/
