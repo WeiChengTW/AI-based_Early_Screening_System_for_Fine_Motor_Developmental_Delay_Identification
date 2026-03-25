@@ -20,11 +20,11 @@ from flask_cors import CORS
 # 1) 資料庫設定
 # =========================
 DB = dict(
-    host="13.238.239.23",
+    host="100.117.109.112",
     port=3306,
-    user="project",
-    password="project",
-    database="pdms2",
+    user="yplab",
+    password="brain0918",
+    database="testPDMS",
     charset="utf8mb4",
     cursorclass=pymysql.cursors.DictCursor,
     autocommit=True,
@@ -573,11 +573,6 @@ def search_scores_api():
             db_path = r.get("result_img_path")
             if db_path:
                 candidates.append(db_path)
-            if tid in MULTI_ANGLE_TASKS:
-                candidates.append(f"{base_filename}-side.jpg")
-                candidates.append(f"{base_filename}-top.jpg")
-            candidates.append(f"{base_filename}.jpg")
-            candidates.append(f"{base_filename}_result.jpg")
 
             selected_filename = None
             for p in candidates:

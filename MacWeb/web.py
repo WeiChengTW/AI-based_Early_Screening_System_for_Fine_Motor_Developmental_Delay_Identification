@@ -73,6 +73,25 @@ def is_under_data_root(file_path: Path) -> bool:
     return root == candidate or root in candidate.parents
 
 
+def resolve_image_path(uid: str, filename: str) -> Path | None:
+    uid_dir = (DATA_ROOT / uid).resolve()
+    if not uid_dir.exists() or not uid_dir.is_dir():
+        return None
+    if not is_under_data_root(uid_dir):
+        return None
+
+    direct = (uid_dir / filename).resolve()
+    if is_under_data_root(direct) and direct.exists() and direct.is_file():
+        return direct
+
+    lower_name = filename.lower()
+    for p in uid_dir.iterdir():
+        if p.is_file() and p.name.lower() == lower_name:
+            if is_under_data_root(p.resolve()):
+                return p.resolve()
+    return None
+
+
 def current_user() -> dict:
     return session.get("user") or {}
 
@@ -241,11 +260,8 @@ def get_image(uid: str, filename: str) -> object:
     if get_extension(filename) not in ALLOWED_EXTENSIONS:
         return "Only image files are allowed.", 400
 
-    absolute_path = (DATA_ROOT / uid / filename).resolve()
-    if not is_under_data_root(absolute_path):
-        return "Bad request.", 400
-
-    if not absolute_path.exists() or not absolute_path.is_file():
+    absolute_path = resolve_image_path(uid, filename)
+    if absolute_path is None:
         return "Image not found.", 404
 
     signed_ok = is_valid_signature(
