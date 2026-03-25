@@ -229,45 +229,45 @@
  *  → 圖片實際放在：PDMS2_web/static/img/icons/bridge.png
  *  → 瀏覽器路徑：   /static/img/icons/bridge.png
  */
-const ICON_BASE = "../static/img/icons/";   // ★ 如果你不是放這裡，只要改這一行
+const ICON_BASE = "../images/";
 
 /** 各個任務 / 關卡的檔名（不含路徑） */
 const ICON_PATHS = {
   // 第一關
-  bridge: "bridge.png",
-  castle: "castle.png",
-  stairs: "stairs.png",
-  wall: "wall.png",
+  bridge: "bridge.jpg",
+  castle: "tower.jpg",
+  stairs: "stairs.jpg",
+  wall: "tower.jpg",
 
   // 第二關
-  maze: "maze.png",
-  circle: "circle.png",
-  square: "square.png",
-  cross: "cross.png",
-  line: "line.png",
-  paint: "paint.png",
-  connect: "connect.png",
+  maze: "maze.jpg",
+  circle: "circle.jpg",
+  square: "square.jpg",
+  cross: "cross.jpg",
+  line: "line.jpg",
+  paint: "fill.jpg",
+  connect: "connect.jpg",
 
   // 第三關
-  house: "house.png",
-  scissorsCircle: "scissorsCircle.png",
-  scissorsSquare: "scissorsSquare.png",
-  scissorsLine: "scissorsLine.png",
-  scissorsHalfpaper: "scissorsHalfpaper.png",
+  house: "circle_win.jpg",
+  scissorsCircle: "circle_win.jpg",
+  scissorsSquare: "square_door.jpg",
+  scissorsLine: "circle_win.jpg",
+  scissorsHalfpaper: "square_door.jpg",
 
   // 第四關
-  paper: "paper.png",
-  foldOnce: "foldOnce.png",
-  foldTwice: "foldTwice.png",
+  paper: "fold1.jpg",
+  foldOnce: "fold1.jpg",
+  foldTwice: "fold2.jpg",
 
   // 第五關
-  treasure: "treasure.png",
-  beans: "beans.png"
+  treasure: "treasure.jpg",
+  beans: "beans.jpg"
 };
 
 /** 統一產生 <img> icon 的 HTML */
 function getIconHtml(key, altText = "") {
-  const file = ICON_PATHS[key] || (key + ".png");   // 沒列在 ICON_PATHS 就用 key.png
+  const file = ICON_PATHS[key];   // 沒列在 ICON_PATHS 就用 key.png
   const src = ICON_BASE + file;
   const alt = altText || key;
   return `<img src="${src}" alt="${alt}" class="icon-img">`;

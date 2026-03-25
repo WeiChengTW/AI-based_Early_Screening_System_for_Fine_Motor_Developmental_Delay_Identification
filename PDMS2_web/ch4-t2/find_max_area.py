@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import json
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -8,13 +9,16 @@ BASE_DIR = Path(__file__).resolve().parent
 
 class MaxAreaQuadFinder:
     def __init__(self, image_path):
+        default_px2cm = 47.4416628993705
         try:
             json_path = BASE_DIR.parent / "px2cm.json"
-            with open(json_path, "r") as f:
+            with open(json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                self.px2cm = data["px2cm"]
-        except FileNotFoundError:
-            self.px2cm = 47.4416628993705  # 預設值
+                self.px2cm = data.get("px2cm") or data.get("pixel_per_cm")
+                if not self.px2cm:
+                    self.px2cm = default_px2cm
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            self.px2cm = default_px2cm
         self.image_path = image_path
         self.img = cv2.imread(image_path)
         if self.img is None:
@@ -26,26 +30,89 @@ class MaxAreaQuadFinder:
 
     def find_max_area_quad(self):
         gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 20, 120)
-        contours, _ = cv2.findContours(
-            edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
+        edges = self._build_edge_map(gray)
+        image_area = float(gray.shape[0] * gray.shape[1])
+
+        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+        best_metric = float("inf")
+        best_candidate = None
+        largest_area = 0.0
+        largest_candidate = None
 
         for cnt in contours:
-            epsilon = 0.02 * cv2.arcLength(cnt, True)
-            approx = cv2.approxPolyDP(cnt, epsilon, True)
+            if cv2.contourArea(cnt) < 400:
+                continue
+
+            hull = cv2.convexHull(cnt)
+            epsilon = 0.02 * cv2.arcLength(hull, True)
+            approx = cv2.approxPolyDP(hull, epsilon, True)
+
             if len(approx) == 4:
-                area = cv2.contourArea(approx)
-                if area > self.max_area:
-                    self.max_area = area
-                    self.max_contour = approx
+                candidate = approx
+            else:
+                rect = cv2.minAreaRect(hull)
+                box = cv2.boxPoints(rect)
+                candidate = box.reshape(-1, 1, 2).astype(np.float32)
+
+            area = cv2.contourArea(candidate)
+            if area < 400 or area > (0.90 * image_area):
+                continue
+
+            ordered = self._order_points(candidate.reshape(4, 2))
+            lengths = self._compute_side_lengths(ordered)
+            short_sides_cm = sorted(
+                [
+                    lengths["top"] / self.px2cm,
+                    lengths["right"] / self.px2cm,
+                    lengths["bottom"] / self.px2cm,
+                    lengths["left"] / self.px2cm,
+                ]
+            )[:2]
+
+            metric = abs(short_sides_cm[0] - 7.5) + abs(short_sides_cm[1] - 7.5)
+            if metric < best_metric:
+                best_metric = metric
+                best_candidate = candidate
+
+            if area > largest_area:
+                largest_area = area
+                largest_candidate = candidate
+
+        self.max_contour = (
+            best_candidate if best_candidate is not None else largest_candidate
+        )
+        if self.max_contour is not None:
+            self.max_area = cv2.contourArea(self.max_contour)
         if self.max_contour is not None:
             self.ordered_pts = self._order_points(self.max_contour.reshape(4, 2))
             self.side_lengths = self._compute_side_lengths(self.ordered_pts)
 
+    @staticmethod
+    def _build_edge_map(gray):
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        # 輸入已經是邊緣圖（黑底白線）時，避免再次 Canny 導致斷邊
+        binary_like_ratio = np.mean((gray <= 20) | (gray >= 235))
+        if binary_like_ratio > 0.95:
+            _, edges = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+        else:
+            median = float(np.median(blurred))
+            lower = int(max(0, 0.66 * median))
+            upper = int(min(255, 1.33 * median))
+            if lower >= upper:
+                lower, upper = 30, 120
+            edges = cv2.Canny(blurred, lower, upper)
+
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
+        edges = cv2.dilate(edges, kernel, iterations=1)
+        return edges
+
     def draw_and_show(self):
-        if self.max_contour is not None:
-            cv2.drawContours(self.img, [self.max_contour], -1, (0, 255, 0), 3)
+        if self.max_contour is not None and len(self.max_contour) >= 4:
+            contour_to_draw = np.round(self.max_contour).astype(np.int32)
+            cv2.drawContours(self.img, [contour_to_draw], -1, (0, 255, 0), 3)
             print("最大面積:", self.max_area)
             print("四個頂點座標:\n", self.max_contour.reshape(4, 2))
             # 顯示四邊長於左上角
@@ -73,11 +140,12 @@ class MaxAreaQuadFinder:
                     )
             resized = cv2.resize(self.img, (0, 0), fx=0.5, fy=0.5)
             # cv2.imshow("Max Area Quad", resized)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-            name = self.image_path.split("\\")[-1].split("_")[0]
-            print(rf"儲存結果到 ch4-t2\result\{name}_max_area_quad.jpg")
-            cv2.imwrite(rf"ch4-t2\result\{name}_max_area_quad.jpg", self.img)
+            name = self.image_path.split(os.sep)[-1].split("_")[0]
+            result_dir = Path(__file__).resolve().parent / "result"
+            result_dir.mkdir(parents=True, exist_ok=True)
+            out_path = result_dir / f"{name}_max_area_quad.jpg"
+            print(f"儲存結果到 {out_path}")
+            cv2.imwrite(str(out_path), self.img)
             # 找出與7.5差距最大的邊
             if self.side_lengths:
                 max_diff = 0

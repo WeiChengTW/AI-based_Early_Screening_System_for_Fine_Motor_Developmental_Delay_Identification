@@ -1,4 +1,6 @@
 {
-  "pixel_per_cm": 40.47139447721568,
-  "image_path": "ch3-t1\\a4_2.jpg"
+  "datetime": "2026-03-11 14:27:30",
+  "pixel_per_cm": 17.039731979370117,
+  "image_path": "kid/test5/ch2-t1.jpg",
+  "cropped_path": "/Users/yplab/Desktop/AI-based_Early_Screening_System_for_Fine_Motor_Developmental_Delay_Identification/PDMS2_web/ch2-t1/cropped_a4/ch2-t1_a4_cropped.jpg"
 }

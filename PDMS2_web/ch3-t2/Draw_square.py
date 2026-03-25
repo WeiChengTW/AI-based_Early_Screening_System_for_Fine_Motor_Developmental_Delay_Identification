@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import os
 
 
 def Draw_square(img_path=None, output_path="Draw_square"):
@@ -36,8 +37,8 @@ def Draw_square(img_path=None, output_path="Draw_square"):
             print("黑框四角座標：")
             for i, pt in enumerate(black_corners):
                 print(f"Corner {i+1}: x={pt[0]:.1f}, y={pt[1]:.1f}")
-        name = img_path.split("\\")[-1].split("_")[0]
-        path = f"ch3-t2/{output_path}/{name}.png"
+        name = img_path.split(os.sep)[-1].split("_")[0]
+        path = os.path.join("ch3-t2", output_path, f"{name}.png")
         cv2.imwrite(path, img)
         print(f"結果已儲存為 '{path}'")
         return path, black_corners_int

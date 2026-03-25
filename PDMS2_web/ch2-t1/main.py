@@ -213,7 +213,7 @@ def main(img_path):
         )
         print(f"{img_path} pixel_per_cm = {pixel_per_cm}")
     except ValueError as e:
-        print(f"⚠️ 跳過 {img_path}：{e}")
+        print(f"跳過 {img_path}：{e}")
 
     # 裁切圖形
     print("\n==裁切圖形==")
@@ -256,11 +256,20 @@ def main(img_path):
     for url, u_type in result.items():
         if u_type == "circle_or_oval":
             px, result_img = cp.check_point(url)
+            offset = px / pixel_per_cm
+            cv2.putText(
+                result_img,
+                f"Offset : {float(offset):.2f} cm",
+                (20, 50),
+                cv2.FONT_HERSHEY_COMPLEX,
+                0.8,
+                (0, 255, 0),
+                1,
+            )
             if px == 0.0:
                 print(f"{url} : Perfect!")
                 return 2, result_img
             else:
-                offset = px / pixel_per_cm
                 print(f"{url} : {offset}cm")
                 if offset <= 1.2:
                     return 2, result_img
@@ -274,6 +283,7 @@ def main(img_path):
             cv2.putText(
                 img, "Other !", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2
             )
+
             # cv2.imshow('Other', img)
             print(f"{url} is {result[url]}!")
             return 0, img
@@ -285,10 +295,10 @@ if __name__ == "__main__":
         # 使用傳入的 uid 和 id 作為圖片路徑
         uid = sys.argv[1]
         img_id = sys.argv[2]
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join("kid", uid, f"{img_id}.jpg")
     # image_path = rf"ch2-t1.jpg"
     score, result_img = main(image_path)
-    cv2.imwrite(rf"kid\{uid}\{img_id}_result.jpg", result_img)
+    cv2.imwrite(os.path.join("kid", uid, f"{img_id}_result.jpg"), result_img)
     # cv2.imwrite(rf"result.jpg", result_img)
     print(score)
     return_score(score)

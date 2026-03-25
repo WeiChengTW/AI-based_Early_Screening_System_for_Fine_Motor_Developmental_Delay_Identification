@@ -2,12 +2,27 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 import sys
+import os
+from pathlib import Path
 
 # ================== 裁剪設定 ==================
 CROP_RATIO = 0.85
 
 # ================== YOLO 模型 ==================
-model = YOLO(r"ch1-t1/toybrick.pt")
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "toybrick.pt"
+
+print(f"[DEBUG] 模型路徑：{MODEL_PATH}", flush=True)
+print(f"[DEBUG] 模型是否存在：{MODEL_PATH.exists()}", flush=True)
+
+try:
+    print("[DEBUG] 開始加載 YOLO 模型...", flush=True)
+    model = YOLO(str(MODEL_PATH))
+    print("[DEBUG] YOLO 模型加載完成", flush=True)
+except Exception as e:
+    print(f"[ERROR] 模型加載失敗：{e}", flush=True)
+    sys.exit(1)
+
 CONF = 0.5
 
 
@@ -52,7 +67,7 @@ def detect_blocks_mask(frame, CONF=0.5):
             if cls_id == 0:  # 方塊類別
                 boxes.append((x1, y1, x2, y2))
                 if r.masks is not None:
-                    # 注意: masks 數據需要與當前幀的尺寸匹配
+                    # masks 數據需要與當前幀的尺寸匹配
                     mask = r.masks.data.cpu().numpy()[i]
                     masks.append(mask)
     return boxes, masks, results
@@ -61,17 +76,21 @@ def detect_blocks_mask(frame, CONF=0.5):
 # ================== 遮掉方塊 ==================
 def remove_blocks_with_mask(binary, masks, extra_px=10):
     h, w = binary.shape
-    for mask in masks:
-        mask_resized = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
-        # 膨脹 mask，增加遮擋範圍
-        kernel = cv2.getStructuringElement(
-            cv2.MORPH_ELLIPSE, (extra_px * 2, extra_px * 2)
-        )
-        mask_dilated = cv2.dilate((mask_resized > 0).astype(np.uint8), kernel)
+    # 建立一個結構元素（核心），用於膨脹
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (extra_px * 2, extra_px * 2))
 
-        # 使用 bitwise_and 替代直接賦值，使邏輯更清晰
-        mask_inverted = cv2.bitwise_not(mask_dilated * 255)
-        binary = cv2.bitwise_and(binary, mask_inverted)
+    for mask in masks:
+        # 調整 mask 大小以符合 binary 影像
+        mask_resized = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+
+        # 膨脹：讓遮擋範圍往外擴張 extra_px 距離
+        # 先轉成 uint8 (0 或 1)，再進行膨脹
+        mask_binary = (mask_resized > 0).astype(np.uint8)
+        mask_dilated = cv2.dilate(mask_binary, kernel)
+
+        # 3. 直接遮蔽：把 mask 區域對應到 binary 的地方直接設為 0 (黑色)
+        # 只要 mask_dilated 為 1 的位置，binary 就變 0
+        binary[mask_dilated > 0] = 0
 
     return binary
 
@@ -79,7 +98,7 @@ def remove_blocks_with_mask(binary, masks, extra_px=10):
 # ================== 骨架化 ==================
 def extract_line_skeleton(binary):
     skeleton = np.zeros(binary.shape, np.uint8)
-    element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+    element = cv2.getStructuringElement(cv2.MORPH_CROSS, (7, 7))
     temp = np.copy(binary)
     while True:
         open_img = cv2.morphologyEx(temp, cv2.MORPH_OPEN, element)
@@ -117,35 +136,36 @@ def is_mask_near_skeleton(mask, skeleton, tol=5):
 # ================== 在方塊中心標記點 ==================
 def draw_block_markers(frame, boxes, masks, is_correct):
     """
-    在原始圖像上標記所有偵測到的方塊。
-    :param frame: 原始圖像 (BGR)
-    :param boxes: YOLO 偵測到的 bounding box 列表 [(x1, y1, x2, y2), ...]
-    :param masks: YOLO 偵測到的 mask 列表
-    :param is_correct: 每個方塊是否正確穿線的布林值列表
+    在原始圖像上標記所有偵測到的方塊，並顯示半透明 Mask。
     """
-    # 檢查列表長度是否匹配
     if len(boxes) != len(is_correct):
         print("警告: boxes 和 is_correct 列表長度不匹配。")
         return frame
 
+    # 建立一個與原圖一樣大的空白圖層，用來畫 Mask
+    overlay = frame.copy()
+    h, w = frame.shape[:2]
+
     for i, box in enumerate(boxes):
         x1, y1, x2, y2 = box
-
-        # 計算中心點
-        center_x = (x1 + x2) // 2
-        center_y = (y1 + y2) // 2
-        center = (center_x, center_y)
-
-        # 根據是否正確穿線來設定顏色
-        # 綠色 (0, 255, 0) 代表正確 (Correct)
-        # 紅色 (0, 0, 255) 代表錯誤 (Incorrect)
         color = (0, 255, 0) if is_correct[i] else (0, 0, 255)
 
-        # 繪製中心點 (圓形)
-        cv2.circle(frame, center, radius=10, color=color, thickness=-1)
+        # --- 新增：繪製半透明 Mask ---
+        if i < len(masks):
+            mask = masks[i]
+            # 將 YOLO 的 mask 縮放回目前 frame 的尺寸
+            mask_resized = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+            # 只要 mask > 0 的地方，就填上顏色
+            overlay[mask_resized > 0] = color
 
-        # 繪製邊界框 (可選，用於確認偵測範圍)
+        # --- 繪製中心點與 Bounding Box ---
+        center = ((x1 + x2) // 2, (y1 + y2) // 2)
+        cv2.circle(frame, center, radius=10, color=color, thickness=-1)
         # cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+    # 將繪製了 Mask 的圖層與原圖依照比例混合 (0.4 是透明度)
+    alpha = 0.4
+    cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
 
     return frame
 
@@ -167,11 +187,11 @@ def score_from_image(img_path, conf=CONF):
 
     # 灰階 + 模糊
     gray = cv2.cvtColor(display_frame, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (17, 17), 0)
+    blurred = cv2.GaussianBlur(gray, (9, 9), 0)
 
     # 自適應二值化：將深色的繩子凸顯出來
     binary = cv2.adaptiveThreshold(
-        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 10
+        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 27, 10
     )
 
     # 閉運算去雜點
@@ -213,46 +233,63 @@ def score_from_image(img_path, conf=CONF):
     skeleton_with_markers = draw_block_markers(skeleton_bgr, boxes, masks, is_correct)
 
     # 這裡的顯示程式碼已經被註釋，如果需要預覽，請取消註釋
-    # # 顯示所有結果圖
-    # display_frame_resized = cv2.resize(display_frame_with_markers, (0, 0), fx=0.3, fy=0.3)
+    # 顯示所有結果圖
+    # display_frame_resized = cv2.resize(display_frame_with_markers, (0, 0), fx=0.7, fy=0.7)
     # cv2.imshow('Original with Markers', display_frame_resized)
-    # binary_resized = cv2.resize(binary_with_markers, (0, 0), fx=0.3, fy=0.3)
+    # binary_resized = cv2.resize(binary_with_markers, (0, 0), fx=0.7, fy=0.7)
     # cv2.imshow('Binary Masked', binary_resized)
-    # skeleton_resized = cv2.resize(skeleton_with_markers, (0, 0), fx=0.3, fy=0.3)
+    # skeleton_resized = cv2.resize(skeleton_with_markers, (0, 0), fx=0.7, fy=0.7)
     # cv2.imshow('Skeleton Line', skeleton_resized)
 
     # 計算分數 (沿用您的計分邏輯)
     correct_num_for_score = correct_num
-    if correct_num_for_score >= 2:  # 假設有 2 個是基礎
+
+    if correct_num_for_score >= 2:  # 有 2 個是基礎
         correct_num_for_score -= 2
 
-    if correct_num_for_score == 4:
+    if correct_num_for_score >= 2:
         score = 2
-    elif correct_num_for_score == 3:
+    elif correct_num_for_score >= 1:
         score = 1
     else:
         score = 0
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
 
     return score, correct_num, display_frame_with_markers
 
 
 if __name__ == "__main__":
+    print("[DEBUG] ch1-t1 main.py 開始執行", flush=True)
+
     if len(sys.argv) > 2:
         # 使用傳入的 uid 和 id 作為圖片路徑
         uid = sys.argv[1]
         img_id = sys.argv[2]
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+
+        # print(f"UID : {uid}\nimg_id : {img_id}")
+        image_path = os.path.join("kid", uid, f"{img_id}.jpg")
+        print(f"[DEBUG] 圖片路徑：{image_path}", flush=True)
+        print(f"[DEBUG] 圖片是否存在：{os.path.exists(image_path)}", flush=True)
+
+        # for i, name in enumerate(sys.argv):
+        #     print(f"{i} : {name}")
+        # print(f"img_path : {image_path}")
     else:
         # 測試圖片路徑 (請替換為實際測試路徑)
         print("請提供 uid 和 img_id 參數或在程式碼中設定測試路徑。")
         sys.exit(0)
 
     # image_path = r"ch1-t1.jpg"  # 讀取圖片
+    print("[DEBUG] 開始分析圖片", flush=True)
     score, num, result_img = score_from_image(image_path)
-    cv2.imwrite(rf"kid\{uid}\{img_id}_result.jpg", result_img)
+    print(f"[DEBUG] 分析完成，score={score}, num={num}", flush=True)
+
+    # print(f"result: kid\{uid}\{img_id}_result.jpg")
+    result_path = os.path.join("kid", uid, f"{img_id}_result.jpg")
+    print(f"[DEBUG] 儲存結果到：{result_path}", flush=True)
+    cv2.imwrite(result_path, result_img)
+
     # score, num = score_from_image(test_img)
     print("score =", score)
     print("num =", num)
+    print("[DEBUG] ch1-t1 main.py 執行完成", flush=True)
     return_score(score)

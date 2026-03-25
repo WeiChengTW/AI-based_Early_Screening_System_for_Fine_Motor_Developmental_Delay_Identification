@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 import sys
+from pathlib import Path
 
 # 引用原本的模組 (請確保這些檔案在同一個目錄下)
 from step1_paper_contour import detect_paper_contour
@@ -9,12 +10,14 @@ from step2_aruco_quarter_a4 import detect_aruco_and_draw_quarter_a4
 from fast_step3_calculate_distances import fast_calculate_distances
 from fast_scoring import fast_calculate_cutting_score
 
+BASE_DIR = Path(__file__).resolve().parent
+
 
 def return_score(score):
     sys.exit(int(score))
 
 
-def process_single_image(image_path, output_dir="result"):
+def process_single_image(image_path, output_dir=None):
     """
     單張圖片處理程序：
     1. 檢測紙張輪廓(藍線)
@@ -23,6 +26,8 @@ def process_single_image(image_path, output_dir="result"):
     4. 快速評分
     """
     filename = os.path.basename(image_path)
+    if output_dir is None:
+        output_dir = str(BASE_DIR / "result")
 
     # 確保輸出目錄存在
     os.makedirs(output_dir, exist_ok=True)
@@ -105,8 +110,8 @@ if __name__ == "__main__":
         img_id = sys.argv[2]
         # uid = "1125"
         # img_id = "ch3-t3"
-        image_path = rf"kid\{uid}\{img_id}.jpg"
-        result_path = rf"kid\{uid}\{img_id}_result.jpg"
+        image_path = os.path.join("kid", uid, f"{img_id}.jpg")
+        result_path = os.path.join("kid", uid, f"{img_id}_result.jpg")
 
     # image_path = rf"PDMS2_web\kid\1125\ch3-t3.jpg"
     # result_path = rf"PDMS2_web\kid\1125\ch3-t3_result.jpg"

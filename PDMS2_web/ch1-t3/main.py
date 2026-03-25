@@ -3,6 +3,7 @@ import numpy as np
 from ultralytics import YOLO
 import os
 import sys
+from pathlib import Path
 
 # 載入 main_side.py 所需的模組
 try:
@@ -19,6 +20,7 @@ except ImportError as e:
 def return_score(score):
     sys.exit(int(score))
 
+
 MODE_SIDE = 0  # 0 = 階梯, 1 = 金字塔
 
 # ====================================================================
@@ -27,6 +29,7 @@ MODE_SIDE = 0  # 0 = 階梯, 1 = 金字塔
 
 CONF_TOP = 0.8
 CROP_RATIO = 0.5
+
 
 def analyze_image_top(frame, model, initial_get_point=2):
     """
@@ -167,7 +170,19 @@ def analyze_image_top(frame, model, initial_get_point=2):
     else:
         color = (0, 0, 0)
 
-    cv2.putText(cropped, summary, (230, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
+    cv2.putText(cropped, summary, (230, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, color, 3)
+
+    # ========== 顯示得分 ==========
+    score_text = f"Score: {GET_POINT}/2"
+    cv2.putText(
+        cropped,
+        score_text,
+        (10, cropped.shape[0] - 20),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.2,
+        (0, 255, 255),
+        2,
+    )
 
     return cropped, summary, GET_POINT
 
@@ -177,8 +192,9 @@ def analyze_image_top(frame, model, initial_get_point=2):
 # ====================================================================
 
 
-CONF_SIDE = 0.8
+CONF_SIDE = 0.6
 GAP_THRESHOLD_RATIO = 1.05
+
 
 def analyze_image_side(IMG_PATH, model):
     """
@@ -186,9 +202,12 @@ def analyze_image_side(IMG_PATH, model):
     返回: (annotated_frame, score_side)
     """
     frame = cv2.imread(IMG_PATH)
+    # == 左右翻面 == #
+    frame = cv2.flip(frame, 1)
     if frame is None:
         raise ValueError(f"讀不到圖片：{IMG_PATH}")
 
+    frame = cv2.convertScaleAbs(frame, alpha=1.4, beta=10)
     annotated_frame = frame.copy()
 
     results = model.predict(source=frame, conf=CONF_SIDE, verbose=False)
@@ -196,8 +215,8 @@ def analyze_image_side(IMG_PATH, model):
 
     masks = r0.masks.data.cpu().numpy() if r0.masks is not None else []
     boxes = r0.boxes.xyxy.cpu().numpy() if r0.boxes is not None else np.empty((0, 4))
-    
-    # ✅ 修正：直接從 boxes 計算質心，確保座標一致
+
+    # 修正：直接從 boxes 計算質心，確保座標一致
     centroids = []
     for box in boxes:
         x1, y1, x2, y2 = box
@@ -212,13 +231,20 @@ def analyze_image_side(IMG_PATH, model):
     for i, box in enumerate(boxes):
         x1, y1, x2, y2 = map(int, box)
         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(annotated_frame, f"Block {i+1}", (x1, y1-5), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.putText(
+            annotated_frame,
+            f"Block {i+1}",
+            (x1, y1 - 5),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            1,
+        )
 
     # ========== 繪製質心（先不繪製，避免遮擋） ==========
     # for i, (cx, cy) in enumerate(centroids):
     #     cv2.circle(annotated_frame, (int(cx), int(cy)), 8, (255, 0, 0), -1)
-    #     cv2.putText(annotated_frame, f"C{i+1}", (int(cx)+10, int(cy)-10), 
+    #     cv2.putText(annotated_frame, f"C{i+1}", (int(cx)+10, int(cy)-10),
     #                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
     # 空隙檢測
@@ -234,32 +260,45 @@ def analyze_image_side(IMG_PATH, model):
         if gap_pairs:
             IS_GAP = True
             print(f"偵測到空隙: {len(gap_pairs) // 2} 組")
-            
+
             try:
                 for pair in gap_pairs:
                     # gap_pairs 格式: ((x1, y1), (x2, y2), distance)
                     if isinstance(pair, tuple) and len(pair) >= 2:
                         point1, point2 = pair[0], pair[1]
-                        
+
                         # 確保 point1 和 point2 是座標元組
                         if isinstance(point1, tuple) and isinstance(point2, tuple):
                             cx1, cy1 = float(point1[0]), float(point1[1])
                             cx2, cy2 = float(point2[0]), float(point2[1])
-                            
+
                             # 繪製空隙連線
-                            cv2.line(annotated_frame, (int(cx1), int(cy1)), (int(cx2), int(cy2)), 
-                                    (0, 0, 255), 3)
-                            
+                            cv2.line(
+                                annotated_frame,
+                                (int(cx1), int(cy1)),
+                                (int(cx2), int(cy2)),
+                                (0, 0, 255),
+                                3,
+                            )
+
                             # 在中點標註 GAP
                             mid_x, mid_y = int((cx1 + cx2) / 2), int((cy1 + cy2) / 2)
-                            cv2.putText(annotated_frame, "GAP", (mid_x, mid_y), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                            
+                            cv2.putText(
+                                annotated_frame,
+                                "GAP",
+                                (mid_x, mid_y),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.6,
+                                (0, 0, 255),
+                                2,
+                            )
+
             except Exception as e:
                 print(f"繪製空隙時發生錯誤: {e}")
                 import traceback
+
                 traceback.print_exc()
-            
+
             if MODE_SIDE == 0:
                 SCORE = 1
         else:
@@ -268,21 +307,27 @@ def analyze_image_side(IMG_PATH, model):
                 SCORE = 1
 
     # 分層並做模式判定
-    grouper = LayerGrouping(layer_ratio=0.2)
+    grouper = LayerGrouping(layer_ratio=0.3)
     layers = grouper.group_by_y(centroids, boxes=boxes)
 
     # ========== 繪製分層（同時繪製質心）==========
-    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), 
-              (255, 0, 255), (0, 255, 255)]
-    
+    colors = [
+        (255, 0, 0),
+        (0, 255, 0),
+        (0, 0, 255),
+        (255, 255, 0),
+        (255, 0, 255),
+        (0, 255, 255),
+    ]
+
     for layer_idx, layer in enumerate(layers):
         color = colors[layer_idx % len(colors)]
-        
+
         # layer 中的每個元素是質心座標
         for centroid in layer:
             if isinstance(centroid, tuple) and len(centroid) == 2:
                 cx, cy = centroid
-                
+
                 # 找到這個質心對應的 box 索引
                 for box_idx, (bcx, bcy) in enumerate(centroids):
                     if abs(bcx - cx) < 5 and abs(bcy - cy) < 5:  # 找到匹配的質心
@@ -291,13 +336,29 @@ def analyze_image_side(IMG_PATH, model):
                             # 繪製分層框框（粗框）
                             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 3)
                             # 繪製分層標籤
-                            cv2.putText(annotated_frame, f"L{layer_idx+1}", (x1, y2+20), 
-                                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                            cv2.putText(
+                                annotated_frame,
+                                f"L{layer_idx+1}",
+                                (x1, y2 + 20),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.6,
+                                color,
+                                2,
+                            )
                             # 繪製質心點（在框框中心）
-                            cv2.circle(annotated_frame, (int(cx), int(cy)), 8, (255, 0, 0), -1)
+                            cv2.circle(
+                                annotated_frame, (int(cx), int(cy)), 8, (255, 0, 0), -1
+                            )
                             # 繪製質心編號
-                            cv2.putText(annotated_frame, f"C{box_idx+1}", (int(cx)+10, int(cy)-10), 
-                                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                            cv2.putText(
+                                annotated_frame,
+                                f"C{box_idx+1}",
+                                (int(cx) + 10, int(cy) - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5,
+                                (255, 255, 255),
+                                2,
+                            )
                             break
 
     if MODE_SIDE == 0:  # 階梯模式
@@ -305,28 +366,51 @@ def analyze_image_side(IMG_PATH, model):
         result, msg = stair_checker.check(layers)
         if not result:
             SCORE = 0
-        
+
         # 顯示階梯檢測結果
-        cv2.putText(annotated_frame, f"Stair: {msg}", (10, 30), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        
+        cv2.putText(
+            annotated_frame,
+            f"Stair: {msg}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (255, 255, 255),
+            2,
+        )
+
     elif MODE_SIDE == 1:  # 金字塔模式
         block_width = (
             (np.mean([b[2] - b[0] for b in boxes]) // 2) if len(boxes) > 0 else 0
         )
         pyramid_checker = PyramidCheck()
-        is_pyramid, pyramid_msg = pyramid_checker.check_pyramid(layers, block_width, IS_GAP)
+        is_pyramid, pyramid_msg = pyramid_checker.check_pyramid(
+            layers, block_width, IS_GAP
+        )
         if not is_pyramid:
             SCORE = 0
-        
+
         # 顯示金字塔檢測結果
-        cv2.putText(annotated_frame, f"Pyramid: {pyramid_msg}", (10, 30), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        cv2.putText(
+            annotated_frame,
+            f"Pyramid: {pyramid_msg}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (255, 255, 255),
+            2,
+        )
 
     # ========== 顯示得分 ==========
     score_text = f"Score: {SCORE}/2"
-    cv2.putText(annotated_frame, score_text, (10, annotated_frame.shape[0] - 20), 
-               cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)
+    cv2.putText(
+        annotated_frame,
+        score_text,
+        (10, annotated_frame.shape[0] - 20),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.2,
+        (0, 255, 255),
+        2,
+    )
 
     return annotated_frame, SCORE
 
@@ -336,35 +420,50 @@ def analyze_image_side(IMG_PATH, model):
 # ====================================================================
 
 if __name__ == "__main__":
+    print("[DEBUG] ch1-t3 main.py 開始執行", flush=True)
+
     if len(sys.argv) > 2:
         uid = sys.argv[1]
         img_id = sys.argv[2]
-        
-        SIDE_IMG_PATH = rf"kid\{uid}\{img_id}-side.jpg"
-        TOP_IMG_PATH = rf"kid\{uid}\{img_id}-top.jpg"
-        MODEL_PATH = r"ch1-t3/toybrick.pt"
+
+        SIDE_IMG_PATH = os.path.join("kid", uid, f"{img_id}-side.jpg")
+        TOP_IMG_PATH = os.path.join("kid", uid, f"{img_id}-top.jpg")
+        print(f"[DEBUG] 側視圖存在: {os.path.exists(SIDE_IMG_PATH)}", flush=True)
+        print(f"[DEBUG] 俯視圖存在: {os.path.exists(TOP_IMG_PATH)}", flush=True)
+
+        BASE_DIR = Path(__file__).resolve().parent
+        MODEL_PATH = BASE_DIR / "toybrick.pt"
+        print(
+            f"[DEBUG] 模型路徑：{MODEL_PATH}, 存在：{MODEL_PATH.exists()}", flush=True
+        )
     else:
         print("請提供 uid 和 img_id 參數")
         sys.exit(1)
 
     # --- 載入模型 ---
     try:
-        yolo_model = YOLO(MODEL_PATH)
+        print("[DEBUG] 開始加載 YOLO 模型...", flush=True)
+        yolo_model = YOLO(str(MODEL_PATH))
+        print("[DEBUG] YOLO 模型加載完成", flush=True)
     except Exception as e:
-        print(f"錯誤：載入 YOLO 模型失敗 (路徑: {MODEL_PATH})。請確保檔案存在。")
-        sys.exit(1)
+        print(f"錯誤：載入 YOLO 模型失敗 (路徑: {MODEL_PATH})。請確保檔案存在。{e}")
 
     # --- 1. 執行側視圖分析 ---
     score_side = -1
     try:
         annotated_side, score_side = analyze_image_side(SIDE_IMG_PATH, yolo_model)
+
         print(f"側視圖 ({SIDE_IMG_PATH}) 得分: {score_side}")
-        
-        # ✅ 儲存側視圖結果
-        side_result_path = rf"kid\{uid}\{img_id}-side_result.jpg"
+
+        # 顯示側視圖結果
+        # cv2.namedWindow('Side View Analysis', cv2.WINDOW_NORMAL)
+        # cv2.imshow('Side View Analysis', annotated_side)
+
+        # 儲存側視圖結果
+        side_result_path = os.path.join("kid", uid, f"{img_id}-side_result.jpg")
         cv2.imwrite(side_result_path, annotated_side)
         print(f"側視圖結果已儲存至: {side_result_path}")
-        
+
     except ValueError as e:
         print(f"側視圖分析失敗: {e}")
     except Exception as e:
@@ -378,21 +477,29 @@ if __name__ == "__main__":
             raise ValueError("讀取俯視圖失敗")
 
         initial_score = 2
-        analyzed_frame, summary, score_top = analyze_image_top(
+        analyzed_top, summary, score_top = analyze_image_top(
             frame_top, yolo_model, initial_score
         )
         print(f"俯視圖 ({TOP_IMG_PATH}) 檢測結果: {summary}")
         print(f"俯視圖得分: {score_top}")
+        # 顯示俯視圖結果
+        # cv2.namedWindow('Top View Analysis', cv2.WINDOW_NORMAL)
+        # cv2.imshow('Top View Analysis', analyzed_top)
 
-        # ✅ 儲存俯視圖結果
-        top_result_path = rf"kid\{uid}\{img_id}-top_result.jpg"
-        cv2.imwrite(top_result_path, analyzed_frame)
+        # 儲存俯視圖結果
+        top_result_path = os.path.join("kid", uid, f"{img_id}-top_result.jpg")
+        cv2.imwrite(top_result_path, analyzed_top)
         print(f"俯視圖結果已儲存至: {top_result_path}")
 
     except ValueError as e:
         print(f"俯視圖分析失敗: {e}")
     except Exception as e:
         print(f"俯視圖分析時發生錯誤: {e}")
+
+    # --- 等待按鍵並關閉 ---
+    # print("\n[提示] 按下任意鍵以關閉預覽視窗並輸出分數...")
+    # cv2.waitKey(0)  # 這行會讓視窗卡住，直到你按鍵
+    # cv2.destroyAllWindows()
 
     # --- 3. 輸出最低得分 ---
     if score_side == 0 or score_top == 0:
@@ -406,5 +513,5 @@ if __name__ == "__main__":
     else:
         final_score = min(valid_scores)
         print(f"\n最終最低得分：{final_score}")
-        
+
     return_score(final_score if final_score != -1 else 0)

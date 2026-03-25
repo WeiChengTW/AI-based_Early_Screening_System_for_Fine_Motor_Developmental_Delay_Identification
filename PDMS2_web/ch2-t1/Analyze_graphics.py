@@ -158,7 +158,7 @@ class Analyze_graphics:
 
     # ------------ 推論＋切割 ------------
     def infer_and_draw(self, image_path, save_results=True, expand_ratio=0.15, clear_dir=False):
-        results = self.model(image_path, conf=0.3, iou=0.3, max_det=100, imgsz=640)
+        results = self.model(image_path, conf=0.6, iou=0.3, max_det=100, imgsz=640)
         image_name = os.path.splitext(os.path.basename(image_path))[0]
         ori_img = cv2.imread(image_path)
 

@@ -451,22 +451,67 @@ function render(){
   };
 
   // 完成按鈕
-  document.getElementById("doneBtn").onclick = ()=>{
+  document.getElementById("doneBtn").onclick = async () => {
+    const uid = await getCurrentUid();
+    const id = getId(); // 獲取當前 ID，例如 "ch1-t1"
+
+    if (!uid) {
+        alert("找不到用戶資訊，請重新登入");
+        return;
+    }
+
+    // 存入進度 (維持原樣)
     const st = JSON.parse(localStorage.getItem(KEY) || "{}");
-    // 解析 chX-tY
-    const [ch,t] = id.split("-").map(s=>parseInt(s.replace(/\D/g,""),10));
-    if(!st.done) st.done = {};
-    const chKey = `ch${ch}`;
-    if(!Array.isArray(st.done[chKey])) st.done[chKey] = [];
-    st.done[chKey][t-1] = true;
+    const [chNum, tNum] = id.replace("ch", "").split("-t").map(Number);
+    if (!st.done) st.done = {};
+    const chKey = `ch${chNum}`;
+    if (!Array.isArray(st.done[chKey])) st.done[chKey] = [];
+    st.done[chKey][tNum - 1] = true;
     localStorage.setItem(KEY, JSON.stringify(st));
 
-    // 小煙火 + 返回相機頁
+    // 噴彩紙慶祝
     celebrate();
-    setTimeout(()=>{
-      location.href = `/html/camera.html?id=${encodeURIComponent(id)}`;
-    }, 800);
-  };
+
+    // 通知後端開始分析 (讀取現有照片)
+    try {
+        const response = await fetch('/run-python', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id, uid: uid })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            console.log("分析啟動成功");
+
+            // --- 核心修改：計算下一關 ---
+            setTimeout(() => {
+                const nextId = `ch${chNum}-t${tNum + 1}`;
+                
+                // 檢查 TASK_MAP 裡有沒有下一關
+                if (TASK_MAP[nextId]) {
+                    // 如果有下一關，跳轉到下一關
+                    location.href = `task.html?id=${nextId}`;
+                } else {
+                    // 如果這章沒任務了，嘗試跳到下一章的第一關 (例如 ch1-t4 完接 ch2-t1)
+                    const nextChId = `ch${chNum + 1}-t1`;
+                    if (TASK_MAP[nextChId]) {
+                        location.href = `task.html?id=${nextChId}`;
+                    } else {
+                        // 全部關卡都破完了，回首頁
+                        alert("太棒了！你已經完成所有挑戰！");
+                        location.href = "/html/index.html";
+                    }
+                }
+            }, 1000); // 留 1 秒鐘看彩紙特效
+            
+        } else {
+            alert("啟動失敗: " + result.error);
+        }
+    } catch (err) {
+        console.error("錯誤:", err);
+    }
+};
 }
 
 // 簡易彩紙（使用 SVG）

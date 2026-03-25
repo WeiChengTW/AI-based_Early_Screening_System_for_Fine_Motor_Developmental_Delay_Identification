@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import os
 from Draw_square import Draw_square
 
 
@@ -263,7 +264,7 @@ class BoxDistanceAnalyzer:
                 print(
                     f"紅框四角到黃框線之最短的最長距離: {(best_corner_min_dist/pixel_per_cm):.2f}"
                 )
-        name = self.image_path.split("\\")[-1].split("_")[0]
+        name = self.image_path.split(os.sep)[-1].split("_")[0]
         path = f"ch3-t2/{out_path}/{name}_max_dist.png"
         cv2.imwrite(path, img_draw)
         print(f"最長距離線段與方框、最大輪廓邊緣已畫出並存檔於 {path}")

@@ -3,8 +3,18 @@ import cv2
 import numpy as np
 import json
 import os
+from pathlib import Path
 
-def get_pixel_per_cm_from_a4(image_path, real_width_cm=29.7, show_debug=False, save_cropped=True, output_folder="cropped_a4"):
+BASE_DIR = Path(__file__).resolve().parent
+
+
+def get_pixel_per_cm_from_a4(
+    image_path,
+    real_width_cm=29.7,
+    show_debug=False,
+    save_cropped=True,
+    output_folder="cropped_a4",
+):
     img = cv2.imread(image_path)
     if img is None:
         raise ValueError("圖片讀取失敗，請確認路徑正確")
@@ -46,47 +56,53 @@ def get_pixel_per_cm_from_a4(image_path, real_width_cm=29.7, show_debug=False, s
     if save_cropped:
         # 建立輸出資料夾
         os.makedirs(output_folder, exist_ok=True)
-        
+
         # 定義目標尺寸（標準化為A4比例）
         target_width = 842  # A4寬度（像素）
         target_height = 595  # A4高度（像素）
-        
+
         # 原始四個角點（順序：左上、右上、右下、左下）
         src_pts = np.array([tl, tr, br, bl], dtype=np.float32)
-        
+
         # 目標四個角點
-        dst_pts = np.array([
-            [0, 0],
-            [target_width, 0],
-            [target_width, target_height],
-            [0, target_height]
-        ], dtype=np.float32)
-        
+        dst_pts = np.array(
+            [
+                [0, 0],
+                [target_width, 0],
+                [target_width, target_height],
+                [0, target_height],
+            ],
+            dtype=np.float32,
+        )
+
         # 計算透視變換矩陣
         transform_matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
-        
+
         # 進行透視變換
-        warped = cv2.warpPerspective(img, transform_matrix, (target_width, target_height))
-        
+        warped = cv2.warpPerspective(
+            img, transform_matrix, (target_width, target_height)
+        )
+
         # 儲存裁切後的圖片
         image_name = os.path.splitext(os.path.basename(image_path))[0]
         cropped_filename = f"{image_name}_a4_cropped.jpg"
         cropped_path = os.path.join(output_folder, cropped_filename)
         cv2.imwrite(cropped_path, warped)
-        
+
         print(f"A4區域已儲存至: {cropped_path}")
 
     # 儲存像素比例資料
-    json_path = "px2cm.json"
+    json_path = str(BASE_DIR.parent / "px2cm.json")
     data = {
-        "pixel_per_cm": pixel_per_cm, 
+        "pixel_per_cm": pixel_per_cm,
         "image_path": image_path,
-        "cropped_path": cropped_path
+        "cropped_path": cropped_path,
     }
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return pixel_per_cm, json_path, cropped_path
+
 
 def crop_a4_region_simple(image_path, output_folder="cropped_a4"):
     """簡單版本：只裁切A4區域，不計算像素比例"""
@@ -116,46 +132,42 @@ def crop_a4_region_simple(image_path, output_folder="cropped_a4"):
 
     # 建立輸出資料夾
     os.makedirs(output_folder, exist_ok=True)
-    
+
     # 定義目標尺寸
     target_width = 842
     target_height = 595
-    
+
     # 透視變換
     src_pts = np.array([tl, tr, br, bl], dtype=np.float32)
-    dst_pts = np.array([
-        [0, 0],
-        [target_width, 0],
-        [target_width, target_height],
-        [0, target_height]
-    ], dtype=np.float32)
-    
+    dst_pts = np.array(
+        [[0, 0], [target_width, 0], [target_width, target_height], [0, target_height]],
+        dtype=np.float32,
+    )
+
     transform_matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
     warped = cv2.warpPerspective(img, transform_matrix, (target_width, target_height))
-    
+
     # 儲存
     image_name = os.path.splitext(os.path.basename(image_path))[0]
     cropped_filename = f"{image_name}_a4_cropped.jpg"
     cropped_path = os.path.join(output_folder, cropped_filename)
     cv2.imwrite(cropped_path, warped)
-    
+
     return cropped_path
+
 
 # 單獨執行這個檔案時顯示紙張輪廓並儲存裁切區域
 if __name__ == "__main__":
-    image_path = r''
-    
+    image_path = r""
+
     # 方法1: 完整功能（計算像素比例 + 儲存裁切圖）
     pixel_per_cm, json_path, cropped_path = get_pixel_per_cm_from_a4(
-        image_path, 
-        show_debug=True, 
-        save_cropped=True,
-        output_folder="cropped_a4"
+        image_path, show_debug=True, save_cropped=True, output_folder="cropped_a4"
     )
     print(f"每公分像素：{pixel_per_cm:.2f}")
     if cropped_path:
         print(f"裁切圖片已儲存：{cropped_path}")
-    
+
     # 方法2: 只裁切A4區域（不計算像素比例）
     # cropped_path = crop_a4_region_simple(image_path, "cropped_a4")
     # print(f"A4區域已儲存：{cropped_path}")

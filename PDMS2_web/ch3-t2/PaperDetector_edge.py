@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import os
 
 
 class PaperDetector_edges:
@@ -71,23 +72,8 @@ class PaperDetector_edges:
         if self.original is None or self.result is None:
             print("尚未有檢測結果")
             return
-        original = self.original
-        result = self.result
-        height, width = original.shape[:2]
-        if width > 800:
-            scale = 800 / width
-            new_width = int(width * scale)
-            new_height = int(height * scale)
-            original_resized = cv2.resize(original, (new_width, new_height))
-            result_resized = cv2.resize(result, (new_width, new_height))
-        else:
-            original_resized = original
-            result_resized = result
-        # cv2.imshow("original_resized", original_resized)
-        # cv2.imshow("result_resized", result_resized)
-        print("按任意鍵關閉視窗...")
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # 背景執行時不可阻塞等待鍵盤事件
+        print("已略過 show_results 視窗顯示（背景任務模式）")
 
     def extract_paper_region(self):
         if self.original is None or self.contour is None:
@@ -137,8 +123,8 @@ class PaperDetector_edges:
     def save_results(self):
         # if self.result is not None:
         #     cv2.imwrite(f"{self.image_path}detected_paper.jpg", self.result)
-        name = self.image_path.split("\\")[-1].split(".")[0]
-        result_path = f"ch3-t2/extracted/{name}_extracted_paper.jpg"
+        name = self.image_path.split(os.sep)[-1].split(".")[0]
+        result_path = os.path.join("ch3-t2", "extracted", f"{name}_extracted_paper.jpg")
         if self.paper_region is not None:
             cv2.imwrite(result_path, self.paper_region)
         print(f"結果已儲存為 '{result_path}'")

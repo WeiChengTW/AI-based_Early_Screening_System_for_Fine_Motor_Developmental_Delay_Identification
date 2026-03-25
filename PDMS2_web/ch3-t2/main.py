@@ -27,7 +27,7 @@ if __name__ == "__main__":
         img_id = sys.argv[2]
         # uid = "lull222"
         # img_id = "ch3-t1"
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join("kid", uid, f"{img_id}.jpg")
         # img = 1
         # for img in range(1, 5):
         #     image_path = rf"raw\img{img}.jpg"
@@ -55,15 +55,16 @@ if __name__ == "__main__":
                     region = cv2.resize(region, (new_width, new_height))
                 # cv2.imshow("提取的紙張區域", region)
                 detector_path = detector.save_results()
-                detector.show_results()
+                # 背景任務模式下不要呼叫 show_results()，避免 GUI 阻塞
                 D_sq_path, black_corners_int = Draw_square(detector_path)
                 if D_sq_path is not None:
 
                     analyzer = BoxDistanceAnalyzer(
-                        box1=black_corners_int, image_path=detector_path
+                        box1=black_corners_int,
+                        image_path=detector_path,
                     )
                     result_img, kid = analyzer.analyze(pixel_per_cm=pixel_per_cm)
-                    result_path = rf"kid\{uid}\{img_id}_result.jpg"
+                    result_path = os.path.join("kid", uid, f"{img_id}_result.jpg")
                     cv2.imwrite(result_path, result_img)
                 if kid is not None:
                     if kid < 0.6:

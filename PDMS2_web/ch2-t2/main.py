@@ -267,10 +267,10 @@ if __name__ == "__main__":
         img_id = sys.argv[2]
         # uid = "lull222"
         # img_id = "ch3-t1"
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join("kid", uid, f"{img_id}.jpg")
     # image_path = r"ch2-t2.jpg"
     score, result_img = main(image_path)
-    cv2.imwrite(rf"kid\{uid}\{img_id}_result.jpg", result_img)
+    cv2.imwrite(os.path.join("kid", uid, f"{img_id}_result.jpg"), result_img)
     # cv2.imwrite(rf"result.jpg", result_img)
     print(f"score = {score}")
     return_score(score)

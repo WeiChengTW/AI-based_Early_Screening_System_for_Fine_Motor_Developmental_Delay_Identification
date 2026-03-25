@@ -2,17 +2,23 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 import sys
+from pathlib import Path
+import os
+
 
 def return_score(score):
     sys.exit(int(score))
+
 
 # ====================================================================
 # === 俯視圖 (TOP View) 分析函數
 # ====================================================================
 
-CONF_TOP = 0.8
+CONF_TOP = 0.6
 CROP_RATIO = 0.5
 GAP_RATIO = 1.2
+
+
 def analyze_image_top(frame, model):
     """
     分析俯視圖 (TOP View) 影像，檢查旋轉和偏移。
@@ -21,7 +27,7 @@ def analyze_image_top(frame, model):
     # 確保 model 是 YOLO 物件
     if isinstance(model, str):
         model = YOLO(model)
-    
+
     H, W, _ = frame.shape
     crop_w, crop_h = int(W * CROP_RATIO), int(H * CROP_RATIO)
     x1 = (W - crop_w) // 2
@@ -105,12 +111,33 @@ def analyze_image_top(frame, model):
         std_y = np.std(y_vals)
         offset = std_x < threshold or std_y < threshold
 
-        cv2.putText(cropped, f"std_x = {std_x:.2f}", (30, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 100, 100), 2)
-        cv2.putText(cropped, f"std_y = {std_y:.2f}", (30, 70),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 100, 255), 2)
-        cv2.putText(cropped, f"threshold = {threshold:.2f}", (30, 100),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 255, 100), 2)
+        cv2.putText(
+            cropped,
+            f"std_x = {std_x:.2f}",
+            (30, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 100, 100),
+            2,
+        )
+        cv2.putText(
+            cropped,
+            f"std_y = {std_y:.2f}",
+            (30, 70),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (100, 100, 255),
+            2,
+        )
+        cv2.putText(
+            cropped,
+            f"threshold = {threshold:.2f}",
+            (30, 100),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (100, 255, 100),
+            2,
+        )
 
     status_rotate = "?"
     is_rotate_ng = False
@@ -132,7 +159,19 @@ def analyze_image_top(frame, model):
     else:
         color = (0, 0, 0)
 
-    cv2.putText(cropped, summary, (230, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 3)
+    cv2.putText(cropped, summary, (230, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 3)
+
+    # ========== 顯示得分 ==========
+    score_text = f"Score: {GET_POINT}/2"
+    cv2.putText(
+        cropped,
+        score_text,
+        (10, cropped.shape[0] - 20),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.2,
+        (0, 255, 255),
+        2,
+    )
 
     return cropped, summary, GET_POINT
 
@@ -141,7 +180,8 @@ def analyze_image_top(frame, model):
 # === 側視圖 (SIDE View) 分析函數 - 簡化版
 # ====================================================================
 
-CONF_SIDE = 0.8
+CONF_SIDE = 0.6
+
 
 def analyze_image_side(IMG_PATH, model):
     """
@@ -154,17 +194,18 @@ def analyze_image_side(IMG_PATH, model):
     # 確保 model 是 YOLO 物件
     if isinstance(model, str):
         model = YOLO(model)
-    
+
     frame = cv2.imread(IMG_PATH)
     if frame is None:
         raise ValueError(f"讀不到圖片：{IMG_PATH}")
 
+    frame = cv2.convertScaleAbs(frame, alpha=1.4, beta=10)
     annotated_frame = frame.copy()
     results = model.predict(source=frame, conf=CONF_SIDE, verbose=False, show=False)
     r0 = results[0]
 
     boxes = r0.boxes.xyxy.cpu().numpy() if r0.boxes is not None else np.empty((0, 4))
-    
+
     # 計算質心
     centroids = []
     for box in boxes:
@@ -175,40 +216,54 @@ def analyze_image_side(IMG_PATH, model):
 
     num_blocks = len(boxes)
     SCORE = 0
-    
+
     # ========== 繪製所有偵測到的框框 ==========
     for i, box in enumerate(boxes):
         x1, y1, x2, y2 = map(int, box)
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (255,255,255), 5)
-        cv2.putText(annotated_frame, f"Block {i+1}", (x1, y1-5), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (255, 255, 255), 5)
+        cv2.putText(
+            annotated_frame,
+            f"Block {i+1}",
+            (x1, y1 - 5),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            1,
+        )
 
     # ========== 第一階段：檢查積木數量 ==========
     if num_blocks != 4:
         msg = f"NG: Found {num_blocks} blocks (Need exactly 4)"
-        cv2.putText(annotated_frame, msg, (20, 45), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
-        cv2.putText(annotated_frame, f"Score: {SCORE}/2", 
-                   (10, annotated_frame.shape[0] - 20), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
+        cv2.putText(
+            annotated_frame, msg, (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3
+        )
+        cv2.putText(
+            annotated_frame,
+            f"Score: {SCORE}/2",
+            (10, annotated_frame.shape[0] - 20),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            2,
+            (0, 0, 255),
+            3,
+        )
         return annotated_frame, SCORE
 
     # ========== 第二階段：自動分層檢查 ==========
     # 按 Y 座標排序
     sorted_centroids = sorted(enumerate(centroids), key=lambda x: x[1][1])
-    
+
     # 計算平均積木高度，用於判斷是否為同一層
     avg_block_height = np.mean([boxes[i][3] - boxes[i][1] for i in range(len(boxes))])
     layer_threshold = avg_block_height * 0.3  # Y 座標差距小於此值視為同一層
-    
+
     # 自動分層
     layers = []
     current_layer = [sorted_centroids[0]]
-    
+
     for i in range(1, len(sorted_centroids)):
         curr_idx, curr_centroid = sorted_centroids[i]
         prev_idx, prev_centroid = current_layer[-1]
-        
+
         # 如果 Y 座標差距小，歸為同一層
         if abs(curr_centroid[1] - prev_centroid[1]) < layer_threshold:
             current_layer.append(sorted_centroids[i])
@@ -216,93 +271,148 @@ def analyze_image_side(IMG_PATH, model):
             # 開新層
             layers.append(current_layer)
             current_layer = [sorted_centroids[i]]
-    
+
     # 加入最後一層
     layers.append(current_layer)
-      
+
     # 檢查每層是否恰好 2 個積木
     for i, layer in enumerate(layers):
         if len(layer) != 2:
             msg = f"NG: Layer {i+1} has {len(layer)} blocks (Need exactly 2)"
-            cv2.putText(annotated_frame, msg, (20, 45), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
-            cv2.putText(annotated_frame, f"Score: {SCORE}/2", 
-                       (10, annotated_frame.shape[0] - 20), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3)
+            cv2.putText(
+                annotated_frame,
+                msg,
+                (20, 45),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                2,
+                (0, 0, 255),
+                3,
+            )
+            cv2.putText(
+                annotated_frame,
+                f"Score: {SCORE}/2",
+                (10, annotated_frame.shape[0] - 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                2,
+                (0, 0, 255),
+                3,
+            )
             return annotated_frame, SCORE
-    
+
     # 提取兩層的索引和質心
     layer1_indices = [item[0] for item in layers[0]]
     layer2_indices = [item[0] for item in layers[1]]
     layer1 = [centroids[i] for i in layer1_indices]
     layer2 = [centroids[i] for i in layer2_indices]
-    
+
     # ========== 繪製分層標註 ==========
     colors = [(255, 0, 0), (0, 0, 255)]  # 紅色=上層, 藍色=下層
-    
-    for layer_idx, (layer, indices) in enumerate([(layer1, layer1_indices), 
-                                                    (layer2, layer2_indices)]):
+
+    for layer_idx, (layer, indices) in enumerate(
+        [(layer1, layer1_indices), (layer2, layer2_indices)]
+    ):
         color = colors[layer_idx]
         for i, centroid in enumerate(layer):
             cx, cy = centroid
             box_idx = indices[i]
             x1, y1, x2, y2 = map(int, boxes[box_idx])
-            
+
             # 繪製分層框框
             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 8)
-            cv2.putText(annotated_frame, f"L{layer_idx+1}-{i+1}", (x1, y2+20), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 4)
+            cv2.putText(
+                annotated_frame,
+                f"L{layer_idx+1}-{i+1}",
+                (x1, y2 + 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                color,
+                4,
+            )
             cv2.circle(annotated_frame, (int(cx), int(cy)), 8, (255, 0, 0), -1)
 
     # ========== 第三階段：檢查空隙 ==========
     # 計算每層內兩個積木的 X 座標距離
     layer1_x_gap = abs(layer1[0][0] - layer1[1][0])
     layer2_x_gap = abs(layer2[0][0] - layer2[1][0])
-    
+
     avg_block_width = np.mean([boxes[i][2] - boxes[i][0] for i in range(len(boxes))])
     gap_threshold = avg_block_width * GAP_RATIO  # 空隙閾值：大於 1.2 倍寬度視為有空隙
-    
+
     has_gap = layer1_x_gap > gap_threshold or layer2_x_gap > gap_threshold
-    
+
     # ========== 繪製空隙標註 ==========
     if has_gap:
         SCORE = 1
         gap_msg = "GAP DETECTED"
         gap_color = (0, 255, 255)
-        
+
         # 標註哪一層有空隙
         if layer1_x_gap > gap_threshold:
             mid_x = (layer1[0][0] + layer1[1][0]) / 2
             mid_y = (layer1[0][1] + layer1[1][1]) / 2
-            cv2.line(annotated_frame, 
-                    (int(layer1[0][0]), int(layer1[0][1])), 
-                    (int(layer1[1][0]), int(layer1[1][1])), 
-                    (0, 0, 255), 3)
-            cv2.putText(annotated_frame, "GAP", (int(mid_x), int(mid_y)), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-        
+            cv2.line(
+                annotated_frame,
+                (int(layer1[0][0]), int(layer1[0][1])),
+                (int(layer1[1][0]), int(layer1[1][1])),
+                (0, 0, 255),
+                3,
+            )
+            cv2.putText(
+                annotated_frame,
+                "GAP",
+                (int(mid_x), int(mid_y)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 0, 255),
+                2,
+            )
+
         if layer2_x_gap > gap_threshold:
             mid_x = (layer2[0][0] + layer2[1][0]) / 2
             mid_y = (layer2[0][1] + layer2[1][1]) / 2
-            cv2.line(annotated_frame, 
-                    (int(layer2[0][0]), int(layer2[0][1])), 
-                    (int(layer2[1][0]), int(layer2[1][1])), 
-                    (0, 0, 255), 3)
-            cv2.putText(annotated_frame, "GAP", (int(mid_x), int(mid_y)), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+            cv2.line(
+                annotated_frame,
+                (int(layer2[0][0]), int(layer2[0][1])),
+                (int(layer2[1][0]), int(layer2[1][1])),
+                (0, 0, 255),
+                3,
+            )
+            cv2.putText(
+                annotated_frame,
+                "GAP",
+                (int(mid_x), int(mid_y)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 0, 255),
+                2,
+            )
     else:
         SCORE = 2
         gap_msg = "NO GAP"
         gap_color = (0, 255, 0)
 
     # ========== 顯示最終結果 ==========
-    cv2.putText(annotated_frame, f"OK: 4 blocks, 2 layers", (20, 45), 
-               cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
-    cv2.putText(annotated_frame, gap_msg, (20, 90), 
-               cv2.FONT_HERSHEY_SIMPLEX, 2, gap_color, 3)
-    cv2.putText(annotated_frame, f"Score: {SCORE}/2", 
-               (10, annotated_frame.shape[0] - 20), 
-               cv2.FONT_HERSHEY_SIMPLEX, 2, gap_color, 3)
+    cv2.putText(
+        annotated_frame,
+        f"OK: 4 blocks, 2 layers",
+        (20, 45),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        2,
+        (0, 255, 0),
+        3,
+    )
+    cv2.putText(
+        annotated_frame, gap_msg, (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 2, gap_color, 3
+    )
+    cv2.putText(
+        annotated_frame,
+        f"Score: {SCORE}/2",
+        (10, annotated_frame.shape[0] - 20),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        2,
+        gap_color,
+        3,
+    )
 
     return annotated_frame, SCORE
 
@@ -312,34 +422,48 @@ def analyze_image_side(IMG_PATH, model):
 # ====================================================================
 
 if __name__ == "__main__":
+    print("[DEBUG] ch1-t4 main.py 開始執行", flush=True)
+
     if len(sys.argv) > 2:
         uid = sys.argv[1]
         img_id = sys.argv[2]
-        
-        SIDE_IMG_PATH = rf"kid\{uid}\{img_id}-side.jpg"
-        TOP_IMG_PATH = rf"kid\{uid}\{img_id}-top.jpg"
-        MODEL_PATH = r"ch1-t4/toybrick.pt"
+
+        SIDE_IMG_PATH = os.path.join("kid", uid, f"{img_id}-side.jpg")
+        TOP_IMG_PATH = os.path.join("kid", uid, f"{img_id}-top.jpg")
+        print(f"[DEBUG] 側視圖存在: {os.path.exists(SIDE_IMG_PATH)}", flush=True)
+        print(f"[DEBUG] 俯視圖存在: {os.path.exists(TOP_IMG_PATH)}", flush=True)
+
+        BASE_DIR = Path(__file__).resolve().parent
+        MODEL_PATH = BASE_DIR / "toybrick.pt"
+        print(
+            f"[DEBUG] 模型路徑：{MODEL_PATH}, 存在：{MODEL_PATH.exists()}", flush=True
+        )
     else:
         print("請提供 uid 和 img_id 參數")
         sys.exit(1)
 
     # --- 載入模型 ---
     try:
-        yolo_model = YOLO(MODEL_PATH)
+        print("[DEBUG] 開始加載 YOLO 模型...", flush=True)
+        yolo_model = YOLO(str(MODEL_PATH))
+        print("[DEBUG] YOLO 模型加載完成", flush=True)
     except Exception as e:
-        print(f"錯誤：載入 YOLO 模型失敗 (路徑: {MODEL_PATH})。請確保檔案存在。")
-        sys.exit(1)
+        print(f"錯誤：載入 YOLO 模型失敗 (路徑: {MODEL_PATH})。請確保檔案存在。{e}")
 
     # --- 1. 執行側視圖分析 ---
     score_side = -1
     try:
         annotated_side, score_side = analyze_image_side(SIDE_IMG_PATH, yolo_model)
         print(f"側視圖 ({SIDE_IMG_PATH}) 得分: {score_side}")
-        
-        side_result_path = rf"kid\{uid}\{img_id}-side_result.jpg"
+
+        side_result_path = os.path.join("kid", uid, f"{img_id}-side_result.jpg")
         cv2.imwrite(side_result_path, annotated_side)
         print(f"側視圖結果已儲存至: {side_result_path}")
-        
+
+        # 顯示側視圖結果
+        # cv2.namedWindow('Side View Analysis', cv2.WINDOW_NORMAL)
+        # cv2.imshow('Side View Analysis', annotated_side)
+
     except ValueError as e:
         print(f"側視圖分析失敗: {e}")
     except Exception as e:
@@ -352,12 +476,15 @@ if __name__ == "__main__":
         if frame_top is None:
             raise ValueError("讀取俯視圖失敗")
 
-        analyzed_frame, summary, score_top = analyze_image_top(frame_top, yolo_model)
+        analyzed_top, summary, score_top = analyze_image_top(frame_top, yolo_model)
         print(f"俯視圖 ({TOP_IMG_PATH}) 檢測結果: {summary}")
         print(f"俯視圖得分: {score_top}")
+        # 顯示俯視圖結果
+        # cv2.namedWindow('Top View Analysis', cv2.WINDOW_NORMAL)
+        # cv2.imshow('Top View Analysis', analyzed_top)
 
-        top_result_path = rf"kid\{uid}\{img_id}-top_result.jpg"
-        cv2.imwrite(top_result_path, analyzed_frame)
+        top_result_path = os.path.join("kid", uid, f"{img_id}-top_result.jpg")
+        cv2.imwrite(top_result_path, analyzed_top)
         print(f"俯視圖結果已儲存至: {top_result_path}")
 
     except ValueError as e:
@@ -365,11 +492,16 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"俯視圖分析時發生錯誤: {e}")
 
+    # --- 等待按鍵並關閉 ---
+    # print("\n[提示] 按下任意鍵以關閉預覽視窗並輸出分數...")
+    # cv2.waitKey(0)  # 這行會讓視窗卡住，直到你按鍵
+    # cv2.destroyAllWindows()
+
     # --- 3. 輸出最低得分 ---
     if score_side == 0 or score_top == 0:
         print("\n總結：有一項分析得分為 0，最終得分為 0。")
         return_score(0)
-    
+
     valid_scores = [s for s in [score_side, score_top] if s != -1]
 
     if not valid_scores:
@@ -378,7 +510,7 @@ if __name__ == "__main__":
     else:
         final_score = min(valid_scores)
         print(f"\n最終最低得分：{final_score}")
-        
+
     return_score(final_score if final_score != -1 else 0)
 
     # # === test ===
@@ -389,7 +521,7 @@ if __name__ == "__main__":
     #     img_url = fr"{i}.jpg"
     #     result, score = analyze_image_side(img_url, model=MODEL_PATH)
     #     print(f'{img_url} : {score}')
-        
+
     #     result = cv2.resize(result, (0, 0), fx = 0.3, fy = 0.3)
     #     cv2.imshow('result', result)
     #     cv2.waitKey(0)

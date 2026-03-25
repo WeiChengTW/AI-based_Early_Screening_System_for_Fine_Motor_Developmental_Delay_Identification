@@ -4,9 +4,14 @@ import numpy as np
 import json
 import glob
 import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
 
 CROP_FOLDER = r"PDMS2_web\ch2-t4\new"
-PXCM_JSON = "px2cm.json"  # 單一比例檔，內容：{"pixel_per_cm": 40.47...}
+PXCM_JSON = (
+    BASE_DIR.parent / "px2cm.json"
+)  # 單一比例檔，內容：{"pixel_per_cm": 40.47...}
 SHOW_SCALE = 0.7
 MARGIN = 40
 
@@ -21,12 +26,13 @@ def preprocess_blackhat(img_bgr):
 
     # 自適應 kernel（依影像尺寸調整，避免 51x51 在小圖過度平滑）
     H, W = gray.shape[:2]
-    k = max(31, (min(H, W) // 20) | 1)          # 黑帽核，約為短邊/20 並取奇數
-    kh = max(3, (W // 60) | 1)                  # 水平強化的寬（越大越吃長水平線）
-    kv = 3                                      # 水平強化的高
+    k = max(31, (min(H, W) // 20) | 1)  # 黑帽核，約為短邊/20 並取奇數
+    kh = max(3, (W // 60) | 1)  # 水平強化的寬（越大越吃長水平線）
+    kv = 3  # 水平強化的高
 
-    bh = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT,
-                          cv2.getStructuringElement(cv2.MORPH_RECT, (k, k)))
+    bh = cv2.morphologyEx(
+        gray, cv2.MORPH_BLACKHAT, cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
+    )
 
     # Otsu 太嚴苛時退一步
     _, bw = cv2.threshold(bh, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -35,8 +41,9 @@ def preprocess_blackhat(img_bgr):
 
     # 消噪與加強水平連續性
     bw = cv2.morphologyEx(bw, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), 1)
-    bw = cv2.morphologyEx(bw, cv2.MORPH_CLOSE,
-                          cv2.getStructuringElement(cv2.MORPH_RECT, (kh, kv)), 1)
+    bw = cv2.morphologyEx(
+        bw, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (kh, kv)), 1
+    )
 
     # 切掉邊框
     MARGIN = 40
@@ -45,24 +52,29 @@ def preprocess_blackhat(img_bgr):
     bw[:, :MARGIN] = 0
     bw[:, -MARGIN:] = 0
 
-    horiz = cv2.morphologyEx(bw, cv2.MORPH_OPEN,
-                             cv2.getStructuringElement(cv2.MORPH_RECT, (kh * 2, kv)))
+    horiz = cv2.morphologyEx(
+        bw, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (kh * 2, kv))
+    )
     return bw, horiz
-
 
 
 def extract_trace_mask(img_bgr):
     # HSV：紅色兩端 + 放寬飽和與亮度
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
-    lower1 = np.array([0, 20, 20]);   upper1 = np.array([15, 255, 255])
-    lower2 = np.array([165, 20, 20]); upper2 = np.array([180, 255, 255])
+    lower1 = np.array([0, 20, 20])
+    upper1 = np.array([15, 255, 255])
+    lower2 = np.array([165, 20, 20])
+    upper2 = np.array([180, 255, 255])
     mask_hsv = cv2.inRange(hsv, lower1, upper1) | cv2.inRange(hsv, lower2, upper2)
 
     # RGB 主導：R 顯著大於 G/B
     b, g, r = cv2.split(img_bgr)
-    dom = (r.astype(np.int16) - g.astype(np.int16) > 18) & \
-          (r.astype(np.int16) - b.astype(np.int16) > 18) & (r > 40)
-    mask_dom = (dom.astype(np.uint8) * 255)
+    dom = (
+        (r.astype(np.int16) - g.astype(np.int16) > 18)
+        & (r.astype(np.int16) - b.astype(np.int16) > 18)
+        & (r > 40)
+    )
+    mask_dom = dom.astype(np.uint8) * 255
 
     # YCrCb：Cr 偏紅
     ycrcb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2YCrCb)
@@ -78,7 +90,7 @@ def extract_trace_mask(img_bgr):
 
     # 形態學順序：先關再開，略膨脹補洞
     trace = cv2.morphologyEx(trace, cv2.MORPH_CLOSE, np.ones((9, 3), np.uint8), 1)
-    trace = cv2.morphologyEx(trace, cv2.MORPH_OPEN,  np.ones((3, 3), np.uint8), 1)
+    trace = cv2.morphologyEx(trace, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), 1)
     trace = cv2.dilate(trace, np.ones((3, 3), np.uint8), 1)
     return trace
 
@@ -127,6 +139,7 @@ def fallback_baseline_from_projection(bw, prefer_band_px=6):
     yR = np.clip(yR, 0, h - 1)
     return (xL, yL, xR, yR)
 
+
 def _is_near_horizontal(x1, y1, x2, y2, tol_deg=8):
     # 以「水平」為目標過濾 Hough 結果
     dx, dy = x2 - x1, y2 - y1
@@ -136,15 +149,20 @@ def _is_near_horizontal(x1, y1, x2, y2, tol_deg=8):
     ang = min(ang, 180 - ang)  # 0 ~ 90
     return ang <= tol_deg
 
+
 def _score_line(x1, y1, x2, y2, w, h, near_border_margin=40):
     length = np.hypot(x2 - x1, y2 - y1)
-    tilt_pen = abs(y2 - y1) * 4.0            # 傾斜懲罰（越水平越好）
+    tilt_pen = abs(y2 - y1) * 4.0  # 傾斜懲罰（越水平越好）
     xmid = 0.5 * (x1 + x2)
-    center_pen = abs(xmid - w * 0.5) * 0.6   # 越靠近中央越好
+    center_pen = abs(xmid - w * 0.5) * 0.6  # 越靠近中央越好
     border_pen = 0
-    if min(x1, x2) < near_border_margin or max(x1, x2) > w - 1 - near_border_margin \
-       or min(y1, y2) < near_border_margin or max(y1, y2) > h - 1 - near_border_margin:
-        border_pen = 120.0                    # 避免吃到邊緣線
+    if (
+        min(x1, x2) < near_border_margin
+        or max(x1, x2) > w - 1 - near_border_margin
+        or min(y1, y2) < near_border_margin
+        or max(y1, y2) > h - 1 - near_border_margin
+    ):
+        border_pen = 120.0  # 避免吃到邊緣線
     return length - tilt_pen - center_pen - border_pen
 
 
@@ -154,16 +172,24 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
 
     # === Hough：先在水平強化圖上抓線，再在 bw 上補抓（雙保險）===
     edges = cv2.Canny(horiz, 30, 150)
-    lines = cv2.HoughLinesP(edges, 1, np.pi / 180,
-                            threshold=max(50, w // 20),
-                            minLineLength=max(80, w // 5),
-                            maxLineGap=max(20, w // 80))
+    lines = cv2.HoughLinesP(
+        edges,
+        1,
+        np.pi / 180,
+        threshold=max(50, w // 20),
+        minLineLength=max(80, w // 5),
+        maxLineGap=max(20, w // 80),
+    )
     if lines is None:
         edges2 = cv2.Canny(bw, 30, 150)
-        lines = cv2.HoughLinesP(edges2, 1, np.pi / 180,
-                                threshold=max(50, w // 20),
-                                minLineLength=max(80, w // 5),
-                                maxLineGap=max(20, w // 80))
+        lines = cv2.HoughLinesP(
+            edges2,
+            1,
+            np.pi / 180,
+            threshold=max(50, w // 20),
+            minLineLength=max(80, w // 5),
+            maxLineGap=max(20, w // 80),
+        )
 
     # 視覺疊圖（不開窗時純保留記錄）
     all_on_img = img_bgr.copy()
@@ -194,16 +220,18 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
         B = bx2 - bx1
         C = bx1 * by2 - bx2 * by1
         den = (A * A + B * B) ** 0.5 + 1e-6
-        band_px = max(5, int(round(0.15 * pixel_per_cm)))   # 帶寬依比例縮放
+        band_px = max(5, int(round(0.15 * pixel_per_cm)))  # 帶寬依比例縮放
 
         yy, xx = np.indices((h, w))
         dist = np.abs(A * xx + B * yy + C) / den
         band_mask = (dist <= band_px).astype(np.uint8) * 255
 
         line_pixels = cv2.bitwise_and(bw, band_mask)
-        k_bridge = cv2.getStructuringElement(cv2.MORPH_RECT, (max(31, w//20), 1))
+        k_bridge = cv2.getStructuringElement(cv2.MORPH_RECT, (max(31, w // 20), 1))
         line_pixels = cv2.morphologyEx(line_pixels, cv2.MORPH_CLOSE, k_bridge, 1)
-        line_pixels = cv2.morphologyEx(line_pixels, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), 1)
+        line_pixels = cv2.morphologyEx(
+            line_pixels, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), 1
+        )
 
         ys, xs = np.where(line_pixels > 0)
         if len(xs) < 20:
@@ -240,11 +268,19 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
     trace[dist_from_line > band_limit_px] = 0
 
     # 從黑白圖補充可能遺漏的曲線像素，但先排除基準線本體
-    curve_from_bw = cv2.bitwise_and(bw, cv2.bitwise_not(cv2.dilate(base_only, np.ones((1, 19), np.uint8), 1)))
+    curve_from_bw = cv2.bitwise_and(
+        bw, cv2.bitwise_not(cv2.dilate(base_only, np.ones((1, 19), np.uint8), 1))
+    )
     curve_from_bw[dist_from_line > band_limit_px] = 0
-    curve_from_bw = cv2.morphologyEx(curve_from_bw, cv2.MORPH_OPEN,  np.ones((3, 3), np.uint8), 1)
-    curve_from_bw = cv2.morphologyEx(curve_from_bw, cv2.MORPH_CLOSE,
-                                     cv2.getStructuringElement(cv2.MORPH_RECT, (13, 3)), 1)
+    curve_from_bw = cv2.morphologyEx(
+        curve_from_bw, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), 1
+    )
+    curve_from_bw = cv2.morphologyEx(
+        curve_from_bw,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (13, 3)),
+        1,
+    )
     trace = cv2.bitwise_or(trace, curve_from_bw)
 
     # 切掉左右貼邊的殘影
@@ -259,7 +295,12 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
     x_max = min(trace.shape[1] - 1, max(xL, xR) + 25)
     for i in range(1, num):
         x, y, w_, h_, area = stats[i]
-        touches_border = (x == 0 or y == 0 or x + w_ >= trace.shape[1] - 1 or y + h_ >= trace.shape[0] - 1)
+        touches_border = (
+            x == 0
+            or y == 0
+            or x + w_ >= trace.shape[1] - 1
+            or y + h_ >= trace.shape[0] - 1
+        )
         if touches_border:
             continue
         cx = x + w_ / 2.0
@@ -273,12 +314,17 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
     if len(xs) > 0:
         dist_all = dist_from_line[ys, xs]
         over_mask = dist_all > TH_PX
-        pick = (np.flatnonzero(over_mask)[np.argmax(dist_all[over_mask])]
-                if np.any(over_mask) else int(np.argmax(dist_all)))
+        pick = (
+            np.flatnonzero(over_mask)[np.argmax(dist_all[over_mask])]
+            if np.any(over_mask)
+            else int(np.argmax(dist_all))
+        )
         far_x, far_y = int(xs[pick]), int(ys[pick])
         far_dev_px = float(dist_all[pick])
         far_dev_cm = far_dev_px / pixel_per_cm
-        print(f"最遠點: ({far_x}, {far_y}) 偏差 {far_dev_cm:.3f} cm （{far_dev_px:.1f} px）")
+        print(
+            f"最遠點: ({far_x}, {far_y}) 偏差 {far_dev_cm:.3f} cm （{far_dev_px:.1f} px）"
+        )
     else:
         print("最遠點: 無（未找到 trace 像素）")
         far_dev_cm = 0.0
@@ -290,17 +336,20 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
     mild_dev_mask = np.zeros_like(trace)
 
     if len(xs) > 0:
-        delta_px = int(max(1, round(0.25 * pixel_per_cm)))   # 遞進帶
-        strong_pos = np.zeros_like(trace); strong_neg = np.zeros_like(trace)
-        weak_pos   = np.zeros_like(trace); weak_neg   = np.zeros_like(trace)
-        strong_pos[ys[signed >  TH_PX], xs[signed >  TH_PX]] = 255
+        delta_px = int(max(1, round(0.25 * pixel_per_cm)))  # 遞進帶
+        strong_pos = np.zeros_like(trace)
+        strong_neg = np.zeros_like(trace)
+        weak_pos = np.zeros_like(trace)
+        weak_neg = np.zeros_like(trace)
+        strong_pos[ys[signed > TH_PX], xs[signed > TH_PX]] = 255
         strong_neg[ys[signed < -TH_PX], xs[signed < -TH_PX]] = 255
-        weak_pos[ys[signed >  TH_PX - delta_px], xs[signed >  TH_PX - delta_px]] = 255
+        weak_pos[ys[signed > TH_PX - delta_px], xs[signed > TH_PX - delta_px]] = 255
         weak_neg[ys[signed < -TH_PX + delta_px], xs[signed < -TH_PX + delta_px]] = 255
 
         def hysteresis_keep(weak, strong):
             num, labels, stats, _ = cv2.connectedComponentsWithStats(weak, 8)
-            if num <= 1: return np.zeros_like(weak)
+            if num <= 1:
+                return np.zeros_like(weak)
             out = np.zeros_like(weak)
             for i in range(1, num):
                 comp = labels == i
@@ -313,17 +362,24 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
 
         # 沿著基準線方向作橋接，避免被小間隙切段
         L = np.hypot(xR - xL, yR - yL) + 1e-6
-        vx = (xR - xL) / L; vy = (yR - yL) / L
-        cx0 = 0.5 * (xL + xR); cy0 = 0.5 * (yL + yR)
+        vx = (xR - xL) / L
+        vy = (yR - yL) / L
+        cx0 = 0.5 * (xL + xR)
+        cy0 = 0.5 * (yL + yR)
 
         def bridge_along_baseline(mask, cx, cy, vx, vy, gap_px):
             h, w = mask.shape
             ang = np.degrees(np.arctan2(vy, vx))
             M = cv2.getRotationMatrix2D((cx, cy), ang, 1.0)
             rot = cv2.warpAffine(mask, M, (w, h), flags=cv2.INTER_NEAREST)
-            if gap_px % 2 == 0: gap_px += 1
-            rot = cv2.morphologyEx(rot, cv2.MORPH_CLOSE,
-                                   cv2.getStructuringElement(cv2.MORPH_RECT, (gap_px, 3)), 1)
+            if gap_px % 2 == 0:
+                gap_px += 1
+            rot = cv2.morphologyEx(
+                rot,
+                cv2.MORPH_CLOSE,
+                cv2.getStructuringElement(cv2.MORPH_RECT, (gap_px, 3)),
+                1,
+            )
             Minv = cv2.getRotationMatrix2D((cx, cy), -ang, 1.0)
             return cv2.warpAffine(rot, Minv, (w, h), flags=cv2.INTER_NEAREST)
 
@@ -335,8 +391,9 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
         # 輕微偏離（≥ ε cm）
         EPS_CM = 0.4
         EPS_PX = int(max(1, round(EPS_CM * pixel_per_cm)))
-        any_pos = np.zeros_like(trace); any_neg = np.zeros_like(trace)
-        any_pos[ys[signed >  EPS_PX], xs[signed >  EPS_PX]] = 255
+        any_pos = np.zeros_like(trace)
+        any_neg = np.zeros_like(trace)
+        any_pos[ys[signed > EPS_PX], xs[signed > EPS_PX]] = 255
         any_neg[ys[signed < -EPS_PX], xs[signed < -EPS_PX]] = 255
         any_pos = bridge_along_baseline(any_pos, cx0, cy0, vx, vy, merge_gap_px)
         any_neg = bridge_along_baseline(any_neg, cx0, cy0, vx, vy, merge_gap_px)
@@ -345,9 +402,9 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
 
     # === 著色輸出 ===
     overlay_dev = img_bgr.copy()
-    overlay_dev[trace > 0] = (0, 255, 0)      # 線跡：綠
+    overlay_dev[trace > 0] = (0, 255, 0)  # 線跡：綠
     overlay_dev[mild_dev_mask > 0] = (0, 255, 255)  # 輕微：黃
-    overlay_dev[over > 0] = (0, 0, 255)       # 嚴重：紅
+    overlay_dev[over > 0] = (0, 0, 255)  # 嚴重：紅
     cv2.line(overlay_dev, (xL, yL), (xR, yR), (255, 0, 0), 3)  # 基準線：藍
 
     # === 次數計數：避免把小雜點算進去，面積門檻依比例調 ===
@@ -359,8 +416,8 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
     min_len_cm = 0.4
     min_area_px = int(max(25, pixel_per_cm * min_len_cm))  # 比你原本略高，減少碎片
 
-    dev_count  = count_blocks(any_dev_mask, min_area_px)
-    over_count = count_blocks(over,         min_area_px)
+    dev_count = count_blocks(any_dev_mask, min_area_px)
+    over_count = count_blocks(over, min_area_px)
 
     print(f"偏離次數（任何偏離）：{dev_count} 次")
     print(f"嚴重偏離（> {TH_CM:.1f} cm）：{over_count} 次")
@@ -370,16 +427,20 @@ def find_baseline_and_show_all(img_bgr, pixel_per_cm):
     if far_dev_cm >= 1.2:
         score, reason = 0, "最大偏差 ≥ 1.2 cm"
     else:
-        if dev_count <= 2:   score = 2
-        elif dev_count <= 4: score = 1
-        else:                score = 0
+        if dev_count <= 2:
+            score = 2
+        elif dev_count <= 4:
+            score = 1
+        else:
+            score = 0
         reason = f"偏離次數={dev_count}"
     print(f"得分: {score} 分（{reason}）")
 
     # === [新增] 自動儲存結果圖到 result 資料夾 ===
-    os.makedirs("result", exist_ok=True)
+    result_dir = BASE_DIR / "result"
+    os.makedirs(result_dir, exist_ok=True)
     base_name = "result_overlay.jpg"
-    out_path = os.path.join("result", base_name)
+    out_path = str(result_dir / base_name)
     ok = cv2.imwrite(out_path, overlay_dev)
     if ok:
         print(f"✅ 已輸出結果圖：{out_path}")

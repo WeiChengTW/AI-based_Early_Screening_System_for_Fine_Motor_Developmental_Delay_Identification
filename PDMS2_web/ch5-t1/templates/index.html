@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Pick Bean Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+        }
+
+        #videoFeed {
+            border: 3px solid #333;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        #startButton {
+            padding: 10px 30px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #startButton:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Pick Bean Game</h1>
+    <img id="videoFeed" src="{{ url_for('video_feed') }}">
+    <button id="startButton">Start Game</button>
+
+    <script>
+        document.getElementById('startButton').addEventListener('click', function () {
+            fetch('/start_game')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        this.style.display = 'none';
+                    }
+                });
+        });
+    </script>
+</body>
+
+</html>

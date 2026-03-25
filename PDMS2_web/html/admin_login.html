@@ -3,146 +3,94 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>登入 | 兒童發展測驗平台</title>
-  <link href="https://fonts.googleapis.com/css2?family=Varela+Round&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <title>測驗系統登入</title>
   <style>
-    :root {
-      --primary: #FF9F43;
-      --primary-hover: #F38B2A;
-      --bg-color: #FFFDF7;
-      --dot-color: #FBE5C8;
-      --text-main: #5C4E4E;
-    }
     body {
-      font-family: 'Varela Round', 'Noto Sans TC', sans-serif;
-      /* 俏皮的波卡圓點背景 */
-      background-color: var(--bg-color);
-      background-image: radial-gradient(var(--dot-color) 2px, transparent 2px);
-      background-size: 30px 30px;
-      color: var(--text-main);
+      font-family: "Noto Sans TC", sans-serif;
+      background: linear-gradient(135deg, #b0c4de, #f8f8f8);
       display: flex;
       align-items: center;
       justify-content: center;
       height: 100vh;
       margin: 0;
     }
-    .login-container {
-      background: #ffffff;
-      border-radius: 24px;
-      border: 3px solid #FFF1E0;
-      box-shadow: 0 10px 25px rgba(255, 159, 67, 0.1);
-      width: 100%;
-      max-width: 380px;
-      padding: 40px 35px;
-      box-sizing: border-box;
+    .login-box {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      width: 340px; /* 稍微加寬一點點以容納文字 */
+      padding: 30px;
     }
-    .login-header {
+    h2 {
       text-align: center;
-      margin-bottom: 30px;
-    }
-    .login-header h2 {
-      margin: 0 0 10px 0;
-      font-size: 26px;
-      font-weight: 700;
-      color: #FF8A65;
-      letter-spacing: 1px;
-    }
-    .login-header p {
-      margin: 0;
-      font-size: 15px;
-      color: #9E8F8F;
-    }
-    .form-group {
+      color: #2b6cb0;
       margin-bottom: 20px;
     }
     input {
       width: 100%;
-      box-sizing: border-box;
-      padding: 14px 16px;
-      border: 2px solid #F0E6D2;
-      border-radius: 16px;
-      font-size: 15px;
-      color: var(--text-main);
-      background-color: #FAFAFA;
-      transition: all 0.3s ease;
-    }
-    input:focus {
-      outline: none;
-      border-color: var(--primary);
-      background-color: #FFF;
-      box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.15);
+      padding: 10px;
+      margin: 5px 0 15px 0; /* 調整間距 */
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 14px;
+      box-sizing: border-box; /* 確保 padding 不會撐破寬度 */
     }
     button {
       width: 100%;
-      padding: 14px;
-      margin-top: 10px;
-      background-color: var(--primary);
+      padding: 10px;
+      background: #2b6cb0;
       color: #fff;
       border: none;
-      border-radius: 16px;
-      font-size: 16px;
-      font-weight: 700;
-      letter-spacing: 1px;
+      border-radius: 5px;
+      font-size: 15px;
       cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 0 #E27D22;
+      margin-top: 10px;
     }
-    button:active {
-      transform: translateY(4px);
-      box-shadow: none;
+    button:hover { background: #1e4e8c; }
+    #msg { color: #c00; text-align: center; margin-top: 10px; font-size: 13px; }
+    
+    /* 新增提示文字樣式 */
+    .hint-label {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 2px;
+      font-weight: bold;
     }
-    #msg {
-      text-align: center;
-      margin-top: 20px;
-      font-size: 14px;
-      font-weight: 500;
-      min-height: 20px;
+    .sub-hint {
+        font-size: 12px;
+        color: #888;
+        margin-bottom: 5px;
+        font-weight: normal;
     }
-    .msg-error { color: #E57373; }
-    .msg-success { color: #81C784; }
-    .msg-info { color: #64B5F6; }
   </style>
 </head>
 <body>
-  <div class="login-container">
-    <div class="login-header">
-      <h2>兒童測驗管理</h2>
-      <p>家長與醫療人員登入入口</p>
-    </div>
-    
-    <div class="form-group">
-      <input id="acc" type="text" placeholder="帳號 (家長請輸入小朋友 UID)" autocomplete="username">
-    </div>
-    <div class="form-group">
-      <input id="pwd" type="password" placeholder="密碼 (預設為小朋友生日)" autocomplete="current-password">
-    </div>
-    
-    <button id="btn">進入系統</button>
-    <div id="msg"></div>
+  <div class="login-box">
+    <h2>系統查詢登入</h2>
+
+    <div class="hint-label">帳號 / UID</div>
+    <div class="sub-hint">管理員請輸入帳號；家長請輸入小朋友 UID</div>
+    <input id="acc" placeholder="例如：staff01 或 a012" autocomplete="username">
+
+    <div class="hint-label">密碼 / 生日</div>
+    <div class="sub-hint">管理員請輸入密碼；家長請輸入生日 (YYYY-MM-DD)</div>
+    <input id="pwd" type="password" placeholder="例如：密碼 或 2016-06-22" autocomplete="current-password">
+
+    <button id="btn">登入</button>
+    <p id="msg"></p>
   </div>
 
   <script>
-    const acc = document.getElementById('acc');
-    const pwd = document.getElementById('pwd');
-    const btn = document.getElementById('btn');
-    const msg = document.getElementById('msg');
-
-    function showMessage(text, type) {
-      msg.textContent = text;
-      msg.className = `msg-${type}`;
-    }
-
     async function login() {
       const account = acc.value.trim();
-      const password = pwd.value;
+      const password = pwd.value.trim(); // 生日不需要空白
       
       if (!account || !password) {
-        showMessage("請完整輸入帳號與密碼", "error");
+        msg.textContent = "請輸入完整資訊";
         return;
       }
 
-      showMessage("資料驗證中...", "info");
-      btn.disabled = true;
+      msg.textContent = "驗證中...";
 
       try {
         const res = await fetch('/api/auth/login', { 
@@ -155,27 +103,29 @@
         const js = await res.json();
 
         if (!js.ok) {
-          showMessage(js.msg || "登入失敗，請檢查輸入的資料", "error");
-          btn.disabled = false;
+          msg.textContent = js.msg || "登入失敗";
           return;
         }
 
         const level = js.user.level;
-        if (level >= 1 && level <= 3) {
-          showMessage("登入成功，準備進入平台", "success");
-          setTimeout(() => { location.href = '/html/admin.html'; }, 600);
-        } else {
-          showMessage("系統權限異常，請聯繫管理員", "error");
-          btn.disabled = false;
-        }
-      } catch (err) {
-        showMessage("無法連線至伺服器，請檢查網路狀態", "error");
-        btn.disabled = false;
+        msg.textContent = "登入成功，正在導向...";
+        
+        // 統一導向 admin.html
+        // 因為 admin.js 會自己判斷 level 來決定要隱藏還是顯示功能按鈕
+        setTimeout(() => {
+            location.href = '/html/admin.html';
+        }, 400);
+
+      } catch (e) {
+        msg.textContent = "系統錯誤，請稍後再試";
+        console.error(e);
       }
     }
 
     btn.addEventListener('click', login);
-    document.addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') login();
+    });
   </script>
 </body>
 </html>

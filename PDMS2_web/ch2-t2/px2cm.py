@@ -3,6 +3,9 @@ import cv2
 import numpy as np
 import json
 import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
 
 
 def get_pixel_per_cm_from_a4(
@@ -89,7 +92,7 @@ def get_pixel_per_cm_from_a4(
         print(f"A4區域已儲存至: {cropped_path}")
 
     # 儲存像素比例資料
-    json_path = "px2cm.json"
+    json_path = str(BASE_DIR.parent / "px2cm.json")
     data = {
         "pixel_per_cm": pixel_per_cm,
         "image_path": image_path,

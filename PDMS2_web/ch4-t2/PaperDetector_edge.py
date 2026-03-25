@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from pathlib import Path
 
 
 class PaperDetector_edges:
@@ -14,84 +15,98 @@ class PaperDetector_edges:
         image = cv2.imread(self.image_path)
         if image is None:
             print("無法讀取圖像檔案")
-            return None, None, None
+            return None
 
-        # 轉換為灰度圖像
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        def save_edges(edges_img):
+            name = Path(self.image_path).stem
+            out_dir = Path(__file__).resolve().parent / "edges"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{name}_edges_paper.jpg"
+            cv2.imwrite(str(out_path), edges_img, [cv2.IMWRITE_JPEG_QUALITY, 100])
+            print(f"結果已儲存為 '{out_path}'")
+            return str(out_path)
 
-        # 高斯模糊降噪
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        def filter_components(binary_img, min_pixels=120, max_components=8):
+            num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+                binary_img, connectivity=8
+            )
+            filtered = np.zeros_like(binary_img)
+            h, w = binary_img.shape
+            kept = []
+            for idx in range(1, num_labels):
+                x, y, cw, ch, area = stats[idx]
+                if area < min_pixels:
+                    continue
+                touches_border = (
+                    x <= 1 or y <= 1 or (x + cw) >= (w - 1) or (y + ch) >= (h - 1)
+                )
+                if touches_border:
+                    continue
 
-        # Canny邊緣檢測
-        edges = cv2.Canny(blurred, 20, 100)
+                kept.append((int(area), idx))
 
-        # 形態學操作來連接斷開的邊緣
+            kept.sort(reverse=True, key=lambda x: x[0])
+            for _, label_idx in kept[:max_components]:
+                filtered[labels == label_idx] = 255
+
+            return filtered
+
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        # 1) 先抓白紙，建立 ROI，避免背景紋理進來
+        white_mask = cv2.inRange(hsv, np.array([0, 0, 155]), np.array([180, 70, 255]))
+        kernel5 = np.ones((5, 5), np.uint8)
+        white_mask = cv2.morphologyEx(
+            white_mask, cv2.MORPH_CLOSE, kernel5, iterations=2
+        )
+        white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_OPEN, kernel5, iterations=1)
+
+        roi_mask = np.ones(white_mask.shape, dtype=np.uint8) * 255
+        white_contours, _ = cv2.findContours(
+            white_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        if white_contours:
+            paper_contour = max(white_contours, key=cv2.contourArea)
+            if cv2.contourArea(paper_contour) > 8000:
+                paper_mask = np.zeros_like(white_mask)
+                cv2.drawContours(paper_mask, [paper_contour], -1, 255, thickness=-1)
+                roi_mask = cv2.dilate(
+                    paper_mask, np.ones((41, 41), np.uint8), iterations=1
+                )
+
+        # 2) 任意顏色紙：用飽和度通道抓輪廓
+        sat_blurred = cv2.GaussianBlur(hsv[:, :, 1], (9, 9), 0)
+        edges = cv2.Canny(sat_blurred, 30, 120)
         kernel = np.ones((3, 3), np.uint8)
         edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
-        edges = cv2.morphologyEx(edges, cv2.MORPH_DILATE, kernel, iterations=1)
+        edges = cv2.bitwise_and(edges, roi_mask)
+        edges = filter_components(edges, min_pixels=180, max_components=6)
+        edges = cv2.dilate(edges, kernel, iterations=1)
+        edges = filter_components(edges, min_pixels=260, max_components=4)
 
-        # 縮小顯示邊緣圖像視窗
-        height, width = edges.shape[:2]
-        if width > 800:
-            scale = 800 / width
-            new_width = int(width * scale)
-            new_height = int(height * scale)
-            edges_resized = cv2.resize(edges, (new_width, new_height))
-        else:
-            edges_resized = edges
-        # cv2.imshow("edges", edges_resized)
-        # 尋找輪廓
-        contours, _ = cv2.findContours(
-            edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
+        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        contours = [cnt for cnt in contours if cv2.contourArea(cnt) > 300]
 
-        # 找到最大面積的輪廓作為紙張
-        paper_contour = None
-        max_area = 0
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            # 設定最小面積閾值，過濾掉太小的輪廓
-            if area > 1000:
-                if area > max_area:
-                    max_area = area
-                    paper_contour = contour
+        # 備援：若飽和度邊緣抓不到，再回到一般灰階邊緣
+        if not contours:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            blurred = cv2.GaussianBlur(gray, (9, 9), 0)
+            edges = cv2.Canny(blurred, 45, 140)
+            edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
+            edges = cv2.bitwise_and(edges, roi_mask)
+            edges = filter_components(edges, min_pixels=220, max_components=6)
+            edges = cv2.morphologyEx(edges, cv2.MORPH_DILATE, kernel, iterations=1)
+            edges = filter_components(edges, min_pixels=300, max_components=4)
+            contours, _ = cv2.findContours(
+                edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
+            )
+            contours = [cnt for cnt in contours if cv2.contourArea(cnt) > 300]
 
-        if paper_contour is not None:
-            # 多邊形近似，簡化輪廓
-            epsilon = 0.02 * cv2.arcLength(paper_contour, True)
-            paper_contour = cv2.approxPolyDP(paper_contour, epsilon, True)
-
-        result_image = image.copy()
-        # if paper_contour is not None:
-        #     cv2.drawContours(result_image, [paper_contour], -1, (0, 0, 255), 3)
-        #     print(f"檢測到紙張區域，面積: {max_area}")
-        #     print(f"紙張輪廓點數: {len(paper_contour)}")
-        # else:
-        #     print("未檢測到明顯的紙張區域")
-
-        # 可選：顯示邊緣檢測結果
-        # 縮小顯示邊緣圖像視窗
-        height, width = edges.shape[:2]
-        if width > 800:
-            scale = 800 / width
-            new_width = int(width * scale)
-            new_height = int(height * scale)
-            edges_resized = cv2.resize(edges, (new_width, new_height))
-        else:
-            edges_resized = edges
-        # cv2.imshow("edges", edges_resized)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
         self.original = image
-        self.result = result_image
-        self.contour = paper_contour
-        name = self.image_path.split("\\")[-1].split(".")[0]
+        self.result = image.copy()
+        self.contour = max(contours, key=cv2.contourArea) if contours else None
 
-        result_path = f"ch4-t2\edges\{name}_edges_paper.jpg"
-        cv2.imwrite(result_path, edges)
-        print(f"結果已儲存為 '{result_path}'")
-
-        return result_path
+        return save_edges(edges)
 
 
 if __name__ == "__main__":
