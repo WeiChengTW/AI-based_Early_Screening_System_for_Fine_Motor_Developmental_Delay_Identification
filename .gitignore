@@ -1,28 +1,42 @@
-# ========== 基本忽略 ==========
-PDMS2_web/console.txt
+/PDMS2_web/console.txt
+*.mp4
+*.jpg
+*.png
+*.jpeg
+*.gif   
 *.pyc
-__pycache__/
 
-# ========== 追蹤特定的圖片資料夾 (保留 HEAD 的意圖) ==========
+# 忽略 macOS Finder metadata
+.DS_Store
+
+# 追蹤 PDMS2_web/images 資料夾內的圖片
 !PDMS2_web/images/
 !PDMS2_web/images/*.jpg
 !PDMS2_web/images/*.png
 
-# ========== 核心忽略 (解決 Push 失敗的問題) ==========
+# 追蹤 PDMS2_web/kid 資料夾內的圖片
+!PDMS2_web/kid/
+!PDMS2_web/kid/*.jpg
+!PDMS2_web/kid/*.png
+!PDMS2_web/kid/*.jpeg
+!PDMS2_web/kid/*.mp4
+
+# 追蹤 PDMS2_web/video 資料夾內的所有檔案
+!PDMS2_web/video/
+!PDMS2_web/video/*
+
+# 忽略大型模型檔案
+/PDMS2_web/ch2-t1/model/circle_detect.h5
+/PDMS2_web/ch2-t2/model/square.h5
+/PDMS2_web/ch2-t3/model/cross_final.h5
+
 # 不要把模型檔 (.h5) 放進 Git
 *.h5
+
+# 各關卡的 model 資料夾也全部忽略
 PDMS2_web/ch2-t1/model/
 PDMS2_web/ch2-t2/model/
 PDMS2_web/ch2-t3/model/
 
-# 忽略大型影片檔，避免推送到雲端時卡住
-*.mp4
-PDMS2_web/video/
-PDMS2_web/recordings/
-
-# 忽略受測者隱私資料
-PDMS2_web/kid/
-PDMS2_web/result/
-
-# 忽略本地測試腳本
-PDMS2_web/run_user.py
+# 忽略虛擬環境資料夾
+.venv39/
