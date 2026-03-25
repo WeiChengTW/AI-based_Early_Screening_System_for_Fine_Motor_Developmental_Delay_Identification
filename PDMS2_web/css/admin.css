@@ -1,242 +1,210 @@
-/* admin.css - 已加入權限控制邏輯 */
+@import url('https://fonts.googleapis.com/css2?family=Varela+Round&family=Noto+Sans+TC:wght@400;500;700&display=swap');
 
-/* ====== Candy / Kid-Friendly Theme ====== */
-:root{
-  --bg1:#fff7fb;         /* 粉粉底 */
-  --bg2:#f0f9ff;         /* 藍藍底 */
-  --card:#ffffff;
-  --border:#e9ecf3;
-  --text:#1f2937;
-  --muted:#6b7280;
-
-  --pink:#f472b6;
-  --pink-50:#fdf2f8;
-  --indigo:#6366f1;
-  --indigo-50:#eef2ff;
-  --mint:#34d399;
-  --mint-50:#ecfdf5;
-  --amber:#f59e0b;
-
-  --radius-xl:20px;
-  --shadow:0 10px 30px rgba(31,41,55,.08);
-  --shadow-soft:0 4px 12px rgba(99,102,241,.12);
+:root {
+  --primary: #FF9F43;
+  --primary-hover: #F38B2A;
+  --secondary: #48CAE4;
+  --bg-body: #FFFDF7;
+  --bg-card: #FFFFFF;
+  --text-main: #5C4E4E;
+  --text-muted: #9E8F8F;
+  --border-color: #F0E6D2;
+  --danger: #FF8FA3;
+  --danger-hover: #FF708A;
 }
 
-*{ box-sizing:border-box; }
-html,body{ height:100%; }
 body {
+  font-family: 'Varela Round', 'Noto Sans TC', sans-serif;
+  background-color: var(--bg-body);
+  background-image: radial-gradient(#FBE5C8 2px, transparent 2px);
+  background-size: 30px 30px;
+  color: var(--text-main);
   margin: 0;
-  font-family: "Noto Sans TC", sans-serif;
-  background: linear-gradient(135deg, #fdf2f8, #eef2ff, #ecfdf5);
-  background-image:
-    radial-gradient(circle at 20% 20%, rgba(255,255,255,0.8) 0, transparent 50%),
-    radial-gradient(circle at 80% 30%, rgba(255,255,255,0.6) 0, transparent 40%),
-    radial-gradient(circle at 40% 70%, rgba(255,255,255,0.7) 0, transparent 50%);
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-attachment: fixed;
+  padding: 0;
 }
 
-
-/* Header */
-.header{
-  position:sticky; top:0; z-index:10;
-  backdrop-filter: blur(10px);
-  background:rgba(255,255,255,.7);
-  border-bottom:1px dashed #f0e6ff;
+/* 頂部導覽列 */
+.header {
+  background-color: var(--bg-card);
+  border-bottom: 3px solid var(--border-color);
+  padding: 16px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 15px rgba(255, 159, 67, 0.05);
 }
-.header .inner{
-  max-width:1160px; margin:0 auto; padding:14px 24px;
-  display:flex; align-items:center; justify-content:space-between;
+.header .brand {
+  font-size: 20px;
+  font-weight: 700;
+  color: #FF8A65;
+  letter-spacing: 1px;
 }
-.brand{ display:flex; align-items:center; gap:12px; }
-.logo{
-  width:44px; height:44px; border-radius:14px;
-  background:linear-gradient(135deg,#ffd6e7,#c7d2fe);
-  box-shadow:var(--shadow-soft);
-  display:grid; place-items:center; font-weight:800; color:#5b21b6;
-}
-.title{ font-size:20px; font-weight:800; letter-spacing:.5px; }
-.muted{ color:var(--muted); font-size:12px; }
-
-/* Layout */
-.wrap{ max-width:1160px; margin: 22px auto; padding: 0 20px; }
-.card{
-  background: var(--card);
-  border:1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow);
-}
-.card .body{ padding:18px; }
-
-/* Controls */
-.toolbar {
+.header .user-info {
+  font-size: 14px;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  padding-bottom: 6px;
+  gap: 20px;
+  font-weight: 500;
 }
 
-/* 滾動條變可愛一點 */
-.toolbar::-webkit-scrollbar {
-  height: 6px;
+/* 佈局與卡片 */
+.wrap {
+  max-width: 1100px;
+  margin: 40px auto;
+  padding: 0 24px;
 }
-.toolbar::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
-  border-radius: 3px;
+.card {
+  background-color: var(--bg-card);
+  border-radius: 20px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.03);
+  border: 3px solid var(--border-color);
+  margin-bottom: 30px;
+  overflow: hidden;
 }
-
-.tool-left, .tool-right{ display:flex; align-items:center; gap:10px; }
-.input, select.input{
-  height:42px; min-width:240px;
-  padding:0 14px; border:1px solid var(--border);
-  border-radius: 999px;
-  background:#fff;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
-  outline:none;
-}
-.input:focus{ border-color:#c7d2fe; box-shadow:0 0 0 4px #eef2ff; }
-
-/* Buttons */
-.btn, .btn.file-label{
-  display:inline-flex; align-items:center; justify-content:center; gap:8px;
-  height:42px; padding:0 14px;
-  background:#fff; border:1px solid var(--border);
-  border-radius: 14px;
-  cursor:pointer; user-select:none;
-  transition: transform .08s ease, box-shadow .2s ease, background .2s ease;
-  box-shadow: 0 2px 0 rgba(0,0,0,.02);
-  font-weight:600;
-}
-.btn:hover, .btn.file-label:hover{ background:#fafafa; box-shadow:0 6px 14px rgba(0,0,0,.06); transform: translateY(-1px); }
-.btn:active, .btn.file-label:active{ transform: translateY(0); box-shadow: none; }
-.btn.primary{ color:#fff; background:linear-gradient(135deg,#a78bfa,#f472b6); border-color:transparent; }
-.btn.primary:hover{ box-shadow:0 10px 22px rgba(99,102,241,.25); }
-.btn:disabled{ opacity:.6; cursor:not-allowed; }
-.file-label input[type=file]{ display:none; }
-
-/* Spacer */
-.spacer-12{ height:14px; }
-
-/* Table 核心樣式 */
-.table-wrap{ border-radius:18px; border:1px solid var(--border); overflow:hidden; background:#fff; }
-table{ width:100%; border-collapse: collapse; font-size:15px; table-layout: fixed; }
-
-thead{
-  background: linear-gradient(180deg, var(--indigo-50), #fff);
-}
-th,td{ padding:14px 16px; border-bottom:1px dashed #eef2ff; }
-th{ font-weight:800; color:#334155; white-space:nowrap; }
-
-/* 表頭按鈕 */
-th > button{
-  display:block;
-  width:100%;
-  font-weight:800; background:none; border:none; cursor:pointer;
-  padding:0; margin:0;
-  text-align: center; /* 預設表頭按鈕置中 */
-}
-
-/* --- [對齊設定] --- */
-
-/* 1. 預設全體靠左 (UID) */
-th, td { text-align: left; }
-th > button { text-align: left; }
-
-/* 2. 第2欄 (姓名) ~ 第8欄 (操作) 預設置中 */
-th:nth-child(n+2), td:nth-child(n+2) { text-align: center; }
-th:nth-child(n+2) > button { text-align: center; }
-
-/* 3. 第7欄 (結果畫面) 微調：往右移 */
-th:nth-child(7), td:nth-child(7) {
-    text-align: left;    /* 為了讓 padding 有效推擠，先靠左 */
-    padding-left: 45px;  /* ★ 修改這裡：數字越大越往右移 */
-}
-th:nth-child(7) {
-    padding-left: 16px;  /* 表頭保持原樣 */
-    text-align: center;  /* 表頭維持置中 */
-}
-
-/* 4. 第8欄 (操作) */
-td.admin-col { text-align: center; }
-
-tbody tr{ transition: transform .08s ease, background .2s ease; }
-tbody tr:hover{ background:#fffdfb; transform: translateY(-1px); }
-.empty{ text-align:center; color:var(--muted); padding:28px; }
-
-/* Badges & Chips */
-.badge{ display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:999px; font-size:12px; border:1px solid #f0e6ff; }
-.ok{ background:var(--mint-50); color:#065f46; border-color:#a7f3d0; }
-.off{ background:#fff; color:#374151; }
-.gray{ background:#f3f4f6; color:#9ca3af; border-color:#e5e7eb; }
-
-/* Dialog */
-dialog{
-  border:none; border-radius:22px; width:min(560px, 92vw);
-  box-shadow:0 25px 60px rgba(0,0,0,.18);
-}
-.dlg-title{ margin:16px 18px 0; font-size:20px; font-weight:800; }
-.dlg-body{ padding:12px 18px; }
-.dlg-actions{ display:flex; justify-content:flex-end; gap:8px; padding:0 18px 16px; }
-.grid-gap{ display:grid; gap:12px; }
-.mb-6{ margin-bottom:6px; }
-.range{ width:100%; accent-color: var(--indigo); }
-
-/* Buttons inside Table */
-td .btn {
-  display: inline-flex;
+.toolbar {
+  padding: 20px 24px;
+  background-color: #FFFAF5;
+  border-bottom: 3px solid var(--border-color);
+  display: flex;
+  gap: 15px;
   align-items: center;
-  justify-content: center;
-  height: 34px;
-  padding: 0 14px;
-  margin: 2px 0;
-  border: none;
-  border-radius: 999px;
+  flex-wrap: wrap;
+}
+
+/* 表單與輸入框 */
+select, input[type="text"], input[type="date"], input[type="number"] {
+  padding: 10px 16px;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  font-size: 15px;
+  outline: none;
+  background-color: #FAFAFA;
+  color: var(--text-main);
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+select:focus, input:focus {
+  border-color: var(--primary);
+  background-color: #FFF;
+  box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.15);
+}
+.form-group { margin-bottom: 20px; }
+.form-group label {
+  display: block;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #796A6A;
+}
+
+/* 童趣積木按鈕 */
+.btn {
+  padding: 10px 20px;
+  border-radius: 16px;
+  font-size: 15px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0,0,0,.08);
+  border: 2px solid var(--border-color);
+  background-color: #FFF;
+  color: var(--text-main);
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.btn:hover { background-color: #FFF8EE; border-color: #FFDAB9; }
+.btn:active { transform: translateY(2px); }
+
+.btn.primary {
+  background-color: var(--primary);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 0 #E27D22;
+}
+.btn.primary:hover { background-color: var(--primary-hover); }
+.btn.primary:active { transform: translateY(4px); box-shadow: none; }
+
+.btn.danger {
+  color: #fff;
+  background-color: var(--danger);
+  border: none;
+  box-shadow: 0 4px 0 #E05B77;
+}
+.btn.danger:hover { background-color: var(--danger-hover); }
+.btn.danger:active { transform: translateY(4px); box-shadow: none; }
+
+.btn-sm { padding: 6px 14px; font-size: 13px; border-radius: 12px; }
+.text-link { color: var(--secondary); cursor: pointer; text-decoration: none; border:none; background:none; padding:0; font-size: 15px; font-weight:700;}
+.text-link:hover { color: #00B4D8; }
+
+/* 圓潤表格 */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.table th, .table td {
+  padding: 16px 24px;
+  text-align: left;
+  border-bottom: 2px solid #F9F6F0;
+}
+.table th {
+  background-color: #FFFAF5;
+  font-weight: 700;
+  color: #8C7A7A;
+}
+.table tr:last-child td { border-bottom: none; }
+.table tr:hover { background-color: #FFFDF8; }
+.table .empty { text-align: center; padding: 40px; color: var(--text-muted); font-weight: 500;}
+
+/* 彈出對話框 */
+dialog {
+  border: 3px solid var(--border-color);
+  border-radius: 24px;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  width: 100%;
+  max-width: 450px;
+  background: #FFF;
+}
+dialog::backdrop { background-color: rgba(92, 78, 78, 0.4); backdrop-filter: blur(3px); }
+.dialog-header {
+  padding: 20px 24px;
+  background-color: #FFFAF5;
+  border-bottom: 2px solid var(--border-color);
+  font-size: 18px;
+  font-weight: 700;
+  color: #FF8A65;
+}
+.dialog-body { padding: 24px; }
+.dialog-footer {
+  padding: 20px 24px;
+  background-color: #FAFAFA;
+  border-top: 2px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
-/* 修改鍵：綠色 */
-.btn-edit { background: linear-gradient(135deg, #34d399, #10b981); color: white; }
-.btn-edit:hover { background: linear-gradient(135deg, #10b981, #059669); transform: translateY(-2px); }
-
-/* 刪除鍵：紅色 */
-.btn-delete { background: linear-gradient(135deg, #f87171, #ef4444); color: white; }
-.btn-delete:hover { background: linear-gradient(135deg, #ef4444, #dc2626); transform: translateY(-2px); }
-
-
-/* =========================================
-   ★ 新增：權限控制樣式 (Permission Styles) ★
-   配合 admin.js 中的 body.classList 切換
-   ========================================= */
-
-/* 1. 預設：隱藏所有受權限保護的按鈕或欄位 (display: none !important) */
-[data-auth="admin-only"], 
-[data-auth="super-admin-only"] { 
-    display: none !important; 
+/* 分數拉條美化 */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: transparent;
+  border: none;
 }
-
-/* 2. 一般管理者 (Level 2 以上)：顯示「管理使用者」等功能 */
-body.is-admin [data-auth="admin-only"] { 
-    display: inline-flex !important; 
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 24px; width: 24px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  margin-top: -8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
-/* 針對表格欄位 (th, td) 的特殊顯示方式 */
-body.is-admin th[data-auth="admin-only"],
-body.is-admin td[data-auth="admin-only"] { 
-    display: table-cell !important; 
-}
-
-/* 3. 超級管理者 (Level 3)：顯示「新增紀錄/刪除」等高階功能 */
-body.is-super-admin [data-auth="super-admin-only"] { 
-    display: inline-flex !important; 
-}
-body.is-super-admin th[data-auth="super-admin-only"],
-body.is-super-admin td[data-auth="super-admin-only"] { 
-    display: table-cell !important; 
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%; height: 8px;
+  cursor: pointer;
+  background: var(--border-color);
+  border-radius: 4px;
 }
