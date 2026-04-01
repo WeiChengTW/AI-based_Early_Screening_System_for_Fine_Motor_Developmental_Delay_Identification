@@ -1,3 +1,5 @@
+/* admin.css - 已加入權限控制邏輯 */
+
 /* ====== Candy / Kid-Friendly Theme ====== */
 :root{
   --bg1:#fff7fb;         /* 粉粉底 */
@@ -71,10 +73,10 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-start; /* 靠左對齊 */
+  justify-content: flex-start;
   gap: 12px;
-  flex-wrap: nowrap;           /* 不要自動換行 */
-  overflow-x: auto;            /* 超出寬度就橫向捲動 */
+  flex-wrap: nowrap;
+  overflow-x: auto;
   padding-bottom: 6px;
 }
 
@@ -98,7 +100,7 @@ body {
 }
 .input:focus{ border-color:#c7d2fe; box-shadow:0 0 0 4px #eef2ff; }
 
-/* Buttons （label + button 一致化） */
+/* Buttons */
 .btn, .btn.file-label{
   display:inline-flex; align-items:center; justify-content:center; gap:8px;
   height:42px; padding:0 14px;
@@ -119,34 +121,48 @@ body {
 /* Spacer */
 .spacer-12{ height:14px; }
 
-/* Table */
+/* Table 核心樣式 */
 .table-wrap{ border-radius:18px; border:1px solid var(--border); overflow:hidden; background:#fff; }
-table{ width:100%; border-collapse: collapse; font-size:15px; }
-/* 讓欄寬遵守 colgroup 設定，避免內容把表頭擠位移 */
-table { table-layout: fixed; }
-
-/* 表頭排序按鈕佔滿整欄，文字跟資料列左緣對齊 */
-th > button{
-  display:block;
-  width:100%;
-  text-align:left;
-  padding:0;         /* 拿掉預設 padding */
-  margin:0;
-}
-
-/* 統一對齊：一般欄位靠左，分數欄靠右 */
-th, td { text-align: left; }
-th:nth-child(5), td:nth-child(5) { text-align: right; }
-
-/* 防止行內元素造成左右位移 */
-th, td { padding:14px 16px; }
+table{ width:100%; border-collapse: collapse; font-size:15px; table-layout: fixed; }
 
 thead{
   background: linear-gradient(180deg, var(--indigo-50), #fff);
 }
 th,td{ padding:14px 16px; border-bottom:1px dashed #eef2ff; }
 th{ font-weight:800; color:#334155; white-space:nowrap; }
-th button{ font-weight:800; background:none; border:none; cursor:pointer; }
+
+/* 表頭按鈕 */
+th > button{
+  display:block;
+  width:100%;
+  font-weight:800; background:none; border:none; cursor:pointer;
+  padding:0; margin:0;
+  text-align: center; /* 預設表頭按鈕置中 */
+}
+
+/* --- [對齊設定] --- */
+
+/* 1. 預設全體靠左 (UID) */
+th, td { text-align: left; }
+th > button { text-align: left; }
+
+/* 2. 第2欄 (姓名) ~ 第8欄 (操作) 預設置中 */
+th:nth-child(n+2), td:nth-child(n+2) { text-align: center; }
+th:nth-child(n+2) > button { text-align: center; }
+
+/* 3. 第7欄 (結果畫面) 微調：往右移 */
+th:nth-child(7), td:nth-child(7) {
+    text-align: left;    /* 為了讓 padding 有效推擠，先靠左 */
+    padding-left: 45px;  /* ★ 修改這裡：數字越大越往右移 */
+}
+th:nth-child(7) {
+    padding-left: 16px;  /* 表頭保持原樣 */
+    text-align: center;  /* 表頭維持置中 */
+}
+
+/* 4. 第8欄 (操作) */
+td.admin-col { text-align: center; }
+
 tbody tr{ transition: transform .08s ease, background .2s ease; }
 tbody tr:hover{ background:#fffdfb; transform: translateY(-1px); }
 .empty{ text-align:center; color:var(--muted); padding:28px; }
@@ -155,6 +171,7 @@ tbody tr:hover{ background:#fffdfb; transform: translateY(-1px); }
 .badge{ display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:999px; font-size:12px; border:1px solid #f0e6ff; }
 .ok{ background:var(--mint-50); color:#065f46; border-color:#a7f3d0; }
 .off{ background:#fff; color:#374151; }
+.gray{ background:#f3f4f6; color:#9ca3af; border-color:#e5e7eb; }
 
 /* Dialog */
 dialog{
@@ -168,38 +185,7 @@ dialog{
 .mb-6{ margin-bottom:6px; }
 .range{ width:100%; accent-color: var(--indigo); }
 
-/* Cute icons before some buttons */
-.btn[data-icon="export"]::before{ content:"📤"; }
-.btn[data-icon="import"]::before{ content:"📥"; }
-.btn[data-icon="add"]::before{ content:"➕"; }
-.btn[data-icon="reload"]::before{ content:"🔄"; }
-
-/* Row action buttons a bit puffier */
-td .btn{ height:36px; padding:0 12px; border-radius:12px; }
-td .btn{ height:34px; padding:0 10px; }
-td .btn + .btn { margin-top:6px; } /* 修改/刪除兩顆之間間距 */
-
-/* 讓表格遵守欄寬設定並平均分配 4 欄 */
-table{ table-layout: fixed; }
-col.equal{ width: calc((100% - 120px) / 4); }  /* 120px = 操作欄寬 */
-
-/* 表頭按鈕佔滿整欄，避免內距造成位移 */
-th > button{
-  display:block;
-  width:100%;
-  text-align:center;   /* 想靠左就改 left */
-  padding:0;
-  margin:0;
-}
-
-/* 四個屬性欄置中（想保留姓名靠左就把第3欄改回 left） */
-th:nth-child(n+2), td:nth-child(n+2){ text-align:center; }
-/* th:nth-child(3), td:nth-child(3){ text-align:left; }     ← 若要姓名靠左就留這行 */
-
-/* 統一 cell 內邊距 */
-th, td{ padding:14px 16px; }
-
-/* 操作欄按鈕統一風格 */
+/* Buttons inside Table */
 td .btn {
   display: inline-flex;
   align-items: center;
@@ -208,7 +194,7 @@ td .btn {
   padding: 0 14px;
   margin: 2px 0;
   border: none;
-  border-radius: 999px;          /* 膠囊形狀 */
+  border-radius: 999px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -217,21 +203,40 @@ td .btn {
 }
 
 /* 修改鍵：綠色 */
-.btn-edit {
-  background: linear-gradient(135deg, #34d399, #10b981);
-  color: white;
-}
-.btn-edit:hover {
-  background: linear-gradient(135deg, #10b981, #059669);
-  transform: translateY(-2px);
-}
+.btn-edit { background: linear-gradient(135deg, #34d399, #10b981); color: white; }
+.btn-edit:hover { background: linear-gradient(135deg, #10b981, #059669); transform: translateY(-2px); }
 
 /* 刪除鍵：紅色 */
-.btn-delete {
-  background: linear-gradient(135deg, #f87171, #ef4444);
-  color: white;
+.btn-delete { background: linear-gradient(135deg, #f87171, #ef4444); color: white; }
+.btn-delete:hover { background: linear-gradient(135deg, #ef4444, #dc2626); transform: translateY(-2px); }
+
+
+/* =========================================
+   ★ 新增：權限控制樣式 (Permission Styles) ★
+   配合 admin.js 中的 body.classList 切換
+   ========================================= */
+
+/* 1. 預設：隱藏所有受權限保護的按鈕或欄位 (display: none !important) */
+[data-auth="admin-only"], 
+[data-auth="super-admin-only"] { 
+    display: none !important; 
 }
-.btn-delete:hover {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  transform: translateY(-2px);
+
+/* 2. 一般管理者 (Level 2 以上)：顯示「管理使用者」等功能 */
+body.is-admin [data-auth="admin-only"] { 
+    display: inline-flex !important; 
+}
+/* 針對表格欄位 (th, td) 的特殊顯示方式 */
+body.is-admin th[data-auth="admin-only"],
+body.is-admin td[data-auth="admin-only"] { 
+    display: table-cell !important; 
+}
+
+/* 3. 超級管理者 (Level 3)：顯示「新增紀錄/刪除」等高階功能 */
+body.is-super-admin [data-auth="super-admin-only"] { 
+    display: inline-flex !important; 
+}
+body.is-super-admin th[data-auth="super-admin-only"],
+body.is-super-admin td[data-auth="super-admin-only"] { 
+    display: table-cell !important; 
 }

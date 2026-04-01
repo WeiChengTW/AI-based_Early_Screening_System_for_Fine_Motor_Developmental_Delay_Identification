@@ -17,8 +17,10 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-target_dir = BASE_DIR.parent / "ch2-t2"
-MODEL_PATH = BASE_DIR.parent / "ch2-t2" / "model" / "square.h5"
+# target_dir = BASE_DIR.parent / "ch2-t2"
+target_dir = os.path.join(BASE_DIR.parent, "ch2-t2")
+# MODEL_PATH = BASE_DIR.parent / "ch2-t2" / "model" / "square.h5"
+MODEL_PATH = os.path.join(BASE_DIR.parent, "ch2-t2", "model", "square.h5")
 
 
 def return_score(score):
@@ -30,7 +32,8 @@ def get_pixel_per_cm_from_a4(
     real_width_cm=29.7,
     show_debug=False,
     save_cropped=True,
-    output_folder=target_dir / "cropped_a4",
+    # output_folder=target_dir / "cropped_a4",
+    output_folder = os.path.join(target_dir, "cropped_a4")
 ):
     img = cv2.imread(image_path)
     if img is None:
@@ -115,7 +118,8 @@ def get_pixel_per_cm_from_a4(
         print(f"A4區域已儲存至: {cropped_path}")
 
     # 儲存像素比例資料
-    json_path = BASE_DIR.parent / "px2cm.json"
+    # json_path = BASE_DIR.parent / "px2cm.json"
+    json_path = os.path.join(BASE_DIR.parent, "px2cm.json")
     # data = {
     #     "pixel_per_cm": pixel_per_cm,
     #     "image_path": image_path,
@@ -184,8 +188,12 @@ def main(img_path):
     # all_images = read_all_images_from_folder(input_folder)
 
     # 建立分類資料夾（只建立一次）
-    quadrilateral_dir = target_dir / "quadrilateral"
-    other_dir = target_dir / "Other"
+    # quadrilateral_dir = target_dir / "quadrilateral"
+    quadrilateral_dir = os.path.join(target_dir, "quadrilateral")
+
+    # other_dir = target_dir / "Other"
+    other_dir = os.path.join(target_dir, "Other")
+
     os.makedirs(quadrilateral_dir, exist_ok=True)
     os.makedirs(other_dir, exist_ok=True)
 
@@ -203,10 +211,12 @@ def main(img_path):
             img_path,
             show_debug=False,  # 關掉視覺化避免卡住
             save_cropped=True,
-            output_folder=target_dir / "cropped_a4",
+            # output_folder=target_dir / "cropped_a4",
+            output_folder = os.path.join(target_dir, "cropped_a4")
         )
         try:
-            json_path = BASE_DIR.parent / "px2cm.json"
+            # json_path = BASE_DIR.parent / "px2cm.json"
+            json_path = os.path.join(BASE_DIR.parent, "px2cm.json")
             with open(json_path, "r") as f:
                 data = json.load(f)
                 pixel_per_cm = data["pixel_per_cm"]
@@ -214,7 +224,9 @@ def main(img_path):
             pixel_per_cm = 47.4416628993705  # 預設值
         print(f"{img_path} pixel_per_cm = {pixel_per_cm}")
     except ValueError as e:
+        img = cv2.imread(img_path)
         print(f"⚠️ 跳過 {img_path}：{e}")
+        return 0, img
 
     # cm_per_pixel = 1 / pixel_per_cm
     # actual_length_cm = 7.5
@@ -223,7 +235,7 @@ def main(img_path):
     print("\n==裁切圖形==")
 
     # print(cropped_path)
-    ready = segmenter.infer_and_draw(img_path, expand_ratio=0.15)
+    ready = segmenter.infer_and_draw(cropped_path, expand_ratio=0.15)
 
     # 分類圖形(圓 橢圓 其他)
     print("\n==分類圖形==\n")
@@ -238,7 +250,7 @@ def main(img_path):
 
             # 直接分類存檔
             if predicted_class_name == "quadrilateral":
-                shutil.copy(url, quadrilateral_dir / os.path.basename(url))
+                shutil.copy(url, os.path.join(quadrilateral_dir, os.path.basename(url)))
             else:
                 # 讀取圖片並加上標記
                 img = cv2.imread(url)
@@ -267,10 +279,16 @@ if __name__ == "__main__":
         img_id = sys.argv[2]
         # uid = "lull222"
         # img_id = "ch3-t1"
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        # image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join('kid',uid, f"{img_id}.jpg")
     # image_path = r"ch2-t2.jpg"
     score, result_img = main(image_path)
-    cv2.imwrite(rf"kid\{uid}\{img_id}_result.jpg", result_img)
-    # cv2.imwrite(rf"result.jpg", result_img)
+    
+    result_path = os.path.join('kid',uid, f"{img_id}_result.jpg")
+    cv2.imwrite(result_path, result_img)
     print(f"score = {score}")
+    
+    # cv2.imshow('result', result_img)
+    # cv2.waitKey(0)
     return_score(score)
+

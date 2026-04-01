@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from Draw_square import Draw_square
-
+import os
 
 class BoxDistanceAnalyzer:
     def __init__(self, box1=None, image_path=None):
@@ -13,7 +13,7 @@ class BoxDistanceAnalyzer:
         """
         只取來自面積大於1000的輪廓的邊緣點
         """
-        img = cv2.imread(image_path)
+        img = image_path
         if img is None:
             print(f"無法讀取圖片: {image_path}")
             return None
@@ -47,7 +47,7 @@ class BoxDistanceAnalyzer:
 
     def detect_largest_contour(self, image_path, area_threshold=3000):
         """回傳最大外部輪廓的有序點集 (N,2)；若無則回傳 None。"""
-        img = cv2.imread(image_path)
+        img = image_path
         if img is None:
             return None
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -183,7 +183,7 @@ class BoxDistanceAnalyzer:
         direction = "內凹" if best_sign >= 0 else "外凸"
         print(f"{direction}方向的最大最短距離: {(best_abs_signed/pixel_per_cm):.2f}")
 
-        img = cv2.imread(self.image_path)
+        img = self.image_path
         img_draw = img.copy()
         # 在左上角寫上最大最短距離（單位：cm）
         text = f"{(best_abs_signed/pixel_per_cm):.2f} cm"
@@ -263,10 +263,11 @@ class BoxDistanceAnalyzer:
                 print(
                     f"紅框四角到黃框線之最短的最長距離: {(best_corner_min_dist/pixel_per_cm):.2f}"
                 )
-        name = self.image_path.split("\\")[-1].split("_")[0]
-        path = f"ch3-t2/{out_path}/{name}_max_dist.png"
-        cv2.imwrite(path, img_draw)
-        print(f"最長距離線段與方框、最大輪廓邊緣已畫出並存檔於 {path}")
+        # name = self.image_path.split("\\")[-1].split("_")[0]
+        # path = os.path.join("ch3-t2", out_path, "ch3-t2", "_result.png")
+
+        # cv2.imwrite(path, img_draw)
+        # print(f"最長距離線段與方框、最大輪廓邊緣已畫出並存檔於 {path}")
         return img_draw, max(
             best_abs_signed / pixel_per_cm, best_corner_min_dist / pixel_per_cm
         )

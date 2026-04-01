@@ -20,15 +20,15 @@ if __name__ == "__main__":
         img_id = sys.argv[2]
         # uid = "lull222"
         # img_id = "ch2-t6"
-        image_path = Path(rf"kid\{uid}\{img_id}.jpg")
+        image_path = Path(os.path.join("kid", uid, f"{img_id}.jpg"))
     else:
         print("參數不足，需傳入 uid 與 img_id")
         return_score(0)
 
     # === 輸出路徑：中間處理用 ===
-    output_dir = Path(rf"PDMS2_web\ch2-t6\new")  # e.g. .../ch2-t6/new/
+    output_dir = Path(os.path.join("ch2-t6", "new"))  # e.g. .../ch2-t6/new/
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / f"new{img_id}.jpg"   # e.g. .../ch2-t6/new/newch2-t6.jpg
+    out_path = os.path.join(output_dir, f"new{img_id}.jpg")   # e.g. .../ch2-t6/new/newch2-t6.jpg
 
     # === 讀圖 ===
     image = cv2.imread(str(image_path))
@@ -56,16 +56,16 @@ if __name__ == "__main__":
         print(f"⚠️ 影像儲存失敗：{out_path}")
         return_score(0)
 
-    print(f"{image_path.name} → {out_path.name}")
+    # print(f"{image_path.name} → {out_path.name}")
 
     # === 呼叫分析，並把結果圖存成 kid\uid\ch2-t6_result.jpg（跟 ch3-t1 一樣規則）===
     try:
         score, result_img = analyze_image(str(out_path), dot_distance_cm=10.0)
 
         # 注意：這裡才是真正給 admin 預覽的「結果圖」位置
-        result_dir = Path(rf"kid\{uid}")
+        result_dir = Path(os.path.join("kid", uid))
         result_dir.mkdir(parents=True, exist_ok=True)
-        result_path = result_dir / f"{img_id}_result.jpg"
+        result_path = os.path.join(result_dir, f"{img_id}_result.jpg")
 
         # 寫入結果圖
         cv2.imwrite(str(result_path), result_img)

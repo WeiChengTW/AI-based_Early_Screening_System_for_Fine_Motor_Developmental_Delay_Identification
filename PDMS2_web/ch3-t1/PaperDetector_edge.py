@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-
+import os
 
 class PaperDetector_edges:
     def __init__(self, image_path):
@@ -20,11 +20,11 @@ class PaperDetector_edges:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
         # 高斯模糊降噪
-        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+        blurred = cv2.GaussianBlur(gray, ( 1, 1), 0)
 
         # Canny邊緣檢測
-        edges = cv2.Canny(blurred, 20, 100, apertureSize=3)
-
+        edges = cv2.Canny(blurred, 10, 80, apertureSize=3)
+        # cv2.imwrite("canny.jpg",edges)
         # 形態學操作來連接斷開的邊緣
         kernel = np.ones((3, 3), np.uint8)
         edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
@@ -147,11 +147,11 @@ class PaperDetector_edges:
         # if self.result is not None:
         #     cv2.imwrite(f"{self.image_path}detected_paper.jpg", self.result)
         name = self.image_path.split("\\")[-1].split(".")[0]
-        result_path = f"ch3-t1\extracted\{name}_extracted_paper.jpg"
+        result_path = os.path.join("ch3-t1", "extracted", f"{name}_extracted_paper.jpg")
         if self.paper_region is not None:
             cv2.imwrite(result_path, self.paper_region)
         print(f"結果已儲存為 '{result_path}'")
-        return result_path
+        return self.paper_region
 
 
 if __name__ == "__main__":

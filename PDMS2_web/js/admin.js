@@ -1,582 +1,392 @@
+// admin.js (權限分離版：Level 2 個資 / Level 3 成績)
 (function () {
-  // =========================
-  // 使用者權限
-  // =========================
-  let userLevel = 0; // 1: 家長(唯讀), 2: 醫療人員, 3: 主管
-
-  async function ensureAuth() {
-    try {
-      const r = await fetch('/api/auth/whoami', { credentials: 'include' });
-      if (!r.ok) throw new Error('whoami not ok');
-      const js = await r.json();
-      if (!js.ok || !js.logged_in) {
-        location.href = '/html/admin_login.html';
-        return false;
-      }
-      userLevel = Number((js.user && js.user.level) || 0);
-    } catch (e) {
-      console.warn('whoami 失敗，使用 Demo 權限 (level=3)：', e);
-      userLevel = 3;
-    }
-    if (userLevel !== 3) {
-      const addBtn = document.querySelector('[data-action="new"]');
-      if (addBtn) addBtn.style.display = 'none';
-    }
-    return true;
-  }
-
-  // =========================
-  // 狀態
-  // =========================
   const state = {
-    rows: [],          // /scores 回來的列：{row_key, uid, name, task_id, test_date, score, result_img_path, ...}
-    users: [],         // /users 回來的 uid 列表（或物件）
+    userLevel: 0, 
+    currentUid: '',
+    currentName: '',
+    rows: [],
+    usersList: [],
     sortKey: 'test_date',
     sortAsc: false,
     selUserId: '',
     selLevel: '',
-    allLevels: []      // 任務清單（Ch1-t1, Ch1-t2, ...）
+    allLevels: []
   };
 
-  // =========================
-  // DOM
-  // =========================
-  const $tbody = document.querySelector('[data-role="tbody"]');
-  const $selName = document.querySelector('[data-role="sel-name"]');
-  const $selLvl = document.querySelector('[data-role="sel-level"]');
-  const $dialog = document.querySelector('[data-role="dialog"]');
-  const $f_userId = $dialog?.querySelector('[data-field="userId"]');
-  const $f_name = $dialog?.querySelector('[data-field="name"]');
-  const $f_level = $dialog?.querySelector('[data-field="level"]');
-  const $f_score = $dialog?.querySelector('[data-field="score"]');
-  const $f_scoreText = $dialog?.querySelector('[data-field="score-text"]');
-  const $f_testDate = $dialog?.querySelector('[data-field="test_date"]');
+  const $tbody = document.getElementById('tbody');
+  const $selName = document.getElementById('sel-name');
+  const $selLvl = document.getElementById('sel-level');
+  
+  // Dialog 相關元素
+  const $dialog = document.getElementById('edit-dialog');
+  const $f_userId = $dialog.querySelector('[data-field="userId"]');
+  const $f_name = $dialog.querySelector('[data-field="name"]');
+  const $f_level = $dialog.querySelector('[data-field="level"]');
+  const $f_score = $dialog.querySelector('[data-field="score"]');
+  const $f_scoreText = $dialog.querySelector('[data-field="score-text"]');
+  const $f_testDate = $dialog.querySelector('[data-field="test_date"]');
+  const $scoreSection = document.getElementById('score-fields');
+  
+  let editingRowKey = null;
 
-  // =========================
-  // 小工具：檔案型態與結果欄位
-  // =========================
-  function isImg(p) {
-    return /\.(jpg|jpeg|png|webp)$/i.test(p || '');
-  }
-  function isVid(p) {
-    return /\.(mp4|webm)$/i.test(p || '');
-  }
-  function makeResultCell(path) {
-    if (!path) return '<td>—</td>';
-    const clean = String(path).replace(/^\//, '');
-    const url = '/artifact/' + clean;
-    const thumb = isImg(path) ? url : '/images/video-icon.svg';
-    return `
-      <td>
-        <img class="thumb" src="${thumb}" alt="thumb"
-             data-action="preview" data-path="${clean}">
-        <button class="btn btn-light" data-action="preview" data-path="${clean}" style="margin-left:8px">
-          查看
-        </button>
-      </td>`;
-  }
-
-  // =========================
-  // 載入資料
-  // =========================
-  async function reloadScores() {
+  async function init() {
     try {
-      const r = await fetch('/scores', { credentials: 'include' });
-      if (!r.ok) {
-        console.warn('/scores 不是 200：', r.status, r.statusText);
-        state.rows = [];
-        return;
-      }
-      const rows = await r.json();
-      state.rows = Array.isArray(rows) ? rows : [];
+      const r = await fetch('/api/auth/whoami');
+      const js = await r.json();
+      if (!js.ok || !js.logged_in) { alert("請先登入"); window.location.href = '/'; return; }
 
-      // 若後端沒給 tasks，就從 rows 自己蒐集 task_id
-      if (!Array.isArray(state.allLevels) || state.allLevels.length === 0) {
-        const set = new Set();
-        for (const x of state.rows) {
-          if (x && x.task_id) set.add(String(x.task_id));
-        }
-        state.allLevels = Array.from(set).sort();
+      const user = js.user;
+      state.currentUid = user.account;
+      state.userLevel = parseInt(user.level) || 0;
+      state.currentName = user.name || user.account;
+
+      let roleName = '家長';
+      if (state.userLevel === 2) roleName = '管理員';
+      if (state.userLevel >= 3) roleName = '超級管理員';
+
+      const infoEl = document.getElementById('current-user-info');
+      if(infoEl) infoEl.textContent = `目前登入: ${state.currentName} (${roleName})`;
+
+      // === 設定權限 Class ===
+      document.body.classList.remove('is-admin', 'is-super-admin');
+      
+      // Level 2 以上 (包含 Level 3) 視為 Admin
+      if (state.userLevel >= 2) {
+        document.body.classList.add('is-admin');
+      }
+      
+      // Level 3 以上視為 Super Admin
+      if (state.userLevel >= 3) {
+        document.body.classList.add('is-super-admin');
+      }
+
+      await loadData();
+      // 只有管理員需要載入使用者清單
+      if (state.userLevel >= 2) await loadAllUsers();
+      
+      rebuildSelects();
+      
+      if (state.userLevel === 1) {
+        state.selUserId = state.currentUid;
+        $selName.value = state.currentUid;
+        $selName.disabled = true;
+      }
+      render();
+
+    } catch (e) {
+      console.error('Init failed', e);
+      alert('初始化失敗，請檢查後端連線');
+    }
+  }
+
+  async function loadAllUsers() {
+      try {
+          const r = await fetch('/users');
+          const js = await r.json();
+          if (js.ok) state.usersList = js.users;
+      } catch (e) { console.warn("載入使用者名單失敗", e); }
+  }
+
+  async function loadData() {
+    const $loading = document.getElementById('tbody');
+    if ($loading) $loading.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px">資料讀取中...</td></tr>';
+
+    try {
+      let payload = {};
+      if (state.userLevel === 1) payload.uid = state.currentUid;
+
+      const r = await fetch('/api/search-scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      const js = await r.json();
+      if (js.success) {
+        state.rows = js.data;
+        const lvlSet = new Set();
+        state.rows.forEach(r => lvlSet.add(r.task_id));
+        state.allLevels = Array.from(lvlSet).sort();
+      } else {
+        alert("資料載入錯誤: " + (js.error || '未知錯誤'));
+        state.rows = [];
       }
     } catch (e) {
-      console.warn('reloadScores 失敗：', e);
+      console.warn('Load data error', e);
       state.rows = [];
     }
   }
 
-  async function reloadUsers() {
-    try {
-      const r = await fetch('/users', { credentials: 'include' });
-      if (!r.ok) {
-        state.users = [];
-        return;
-      }
-      const js = await r.json();
-      // 允許 /users 回傳 ["U1","U2"] 或 [{uid:"U1",name:"小明"}, ...]
-      state.users = (js && js.ok && Array.isArray(js.users)) ? js.users : [];
-    } catch {
-      state.users = [];
-    }
-  }
-
-  // =========================
-  // 重建下拉選單
-  // =========================
   function rebuildSelects() {
-    // ---- 姓名/uid 下拉 ----
-    const optsU = ['<option value="">（請選擇姓名）</option>'];
-
-    if (Array.isArray(state.users) && state.users.length > 0) {
-      state.users.forEach(u => {
-        let uid = '';
-        let name = '';
-        if (typeof u === 'string') {
-          uid = u;
-        } else if (u && typeof u === 'object') {
-          uid = u.uid || '';
-          name = u.name || '';
-        }
-        if (!uid) return;
-        const label = name ? `${name} (${uid})` : uid;
-        optsU.push(`<option value="${uid}">${label}</option>`);
-      });
+    $selName.innerHTML = '';
+    
+    if (state.userLevel === 1) {
+      const opt = document.createElement('option');
+      opt.value = state.currentUid;
+      opt.textContent = `${state.currentName} (${state.currentUid})`;
+      opt.selected = true;
+      $selName.appendChild(opt);
     } else {
-      // 如果 /users 沒資料，就從 score_list rows 蒐集 uid
-      const seen = new Set();
-      (state.rows || []).forEach(r => {
-        const uid = String(r.uid || '').trim();
-        if (!uid || seen.has(uid)) return;
-        seen.add(uid);
-        const label = r.name ? `${r.name} (${uid})` : uid;
-        optsU.push(`<option value="${uid}">${label}</option>`);
+      const def = document.createElement('option');
+      def.value = '';
+      def.textContent = '（所有小朋友）';
+      $selName.appendChild(def);
+
+      const sourceList = (state.usersList.length > 0) ? state.usersList : [];
+      // 簡單的 dedupe 邏輯
+      const uidMap = new Map();
+      sourceList.forEach(u => uidMap.set(u.uid, u.name));
+      state.rows.forEach(r => { if (!uidMap.has(r.uid)) uidMap.set(r.uid, r.name || r.uid); });
+
+      Array.from(uidMap.keys()).sort().forEach(uid => {
+          const opt = document.createElement('option');
+          opt.value = uid;
+          opt.textContent = uidMap.get(uid) || uid;
+          $selName.appendChild(opt);
       });
     }
 
-    if ($selName) {
-      $selName.innerHTML = optsU.join('');
-      if (state.selUserId) $selName.value = state.selUserId;
-    }
-
-    // ---- 關卡下拉 ----
-    const preferredOrder = [
-      'Ch1-t1', 'Ch1-t2', 'Ch1-t3',
-      'Ch2-t1', 'Ch2-t2', 'Ch2-t3', 'Ch2-t4', 'Ch2-t5', 'Ch2-t6',
-      'Ch3-t1', 'Ch3-t2', 'Ch4-t1', 'Ch4-t2', 'Ch5-t1'
-    ];
-    let levels = [];
-    if (Array.isArray(state.allLevels) && state.allLevels.length > 0) {
-      const setAll = new Set(state.allLevels);
-      levels = preferredOrder.filter(x => setAll.has(x));
-      state.allLevels.forEach(x => { if (!levels.includes(x)) levels.push(x); });
-    } else {
-      levels = preferredOrder.slice();
-    }
-
-    const optsL = ['<option value="">（請選擇關卡）</option>'];
-    levels.forEach(lvl => optsL.push(`<option value="${lvl}">${lvl}</option>`));
-    if ($selLvl) {
-      $selLvl.innerHTML = optsL.join('');
-      if (state.selLevel) $selLvl.value = state.selLevel;
-    }
-  }
-
-  // =========================
-  // 資料整理與排序
-  // =========================
-  function buildRows() {
-    let rows = state.rows.slice();
-
-    if (state.selUserId) {
-      rows = rows.filter(r => r.uid === state.selUserId);
-    }
-    if (state.selLevel) {
-      rows = rows.filter(r => r.task_id === state.selLevel);
-    }
-
-    rows.sort((a, b) => {
-      const A = a[state.sortKey];
-      const B = b[state.sortKey];
-      let cmp = 0;
-      if (state.sortKey === 'score') {
-        cmp = Number(A || 0) - Number(B || 0);
-      } else {
-        cmp = String(A || '').localeCompare(String(B || ''));
-      }
-      return state.sortAsc ? cmp : -cmp;
+    $selLvl.innerHTML = '<option value="">（所有關卡）</option>';
+    const standardLevels = ['Ch1-t1', 'Ch1-t2', 'Ch1-t3', 'Ch1-t4', 'Ch2-t1', 'Ch2-t2', 'Ch2-t3', 'Ch2-t4', 'Ch2-t5', 'Ch2-t6', 'Ch3-t1', 'Ch3-t2', 'Ch3-t3', 'Ch3-t4', 'Ch4-t1', 'Ch4-t2', 'Ch5-t1'];
+    const levelsToShow = new Set([...standardLevels, ...state.allLevels]);
+    Array.from(levelsToShow).sort().forEach(lvl => {
+      const opt = document.createElement('option');
+      opt.value = lvl;
+      opt.textContent = lvl;
+      $selLvl.appendChild(opt);
     });
-    return rows;
   }
 
-  // =========================
-  // 渲染表格
-  // =========================
   function render() {
-    const rows = buildRows();
-    if (!rows.length) {
-      const msg = '沒有符合條件的資料';
-      $tbody.innerHTML = `<tr><td colspan="7" class="empty">${msg}</td></tr>`;
+    let displayRows = state.rows.filter(r => {
+      const matchUser = !state.selUserId || r.uid === state.selUserId;
+      const matchLevel = !state.selLevel || r.task_id === state.selLevel;
+      return matchUser && matchLevel;
+    });
+
+    displayRows.sort((a, b) => {
+      let valA = a[state.sortKey] || '';
+      let valB = b[state.sortKey] || '';
+      if (state.sortKey === 'score') {
+        valA = parseFloat(valA) || 0;
+        valB = parseFloat(valB) || 0;
+      }
+      if (valA < valB) return state.sortAsc ? -1 : 1;
+      if (valA > valB) return state.sortAsc ? 1 : -1;
+      return 0;
+    });
+
+    document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.sort === state.sortKey) {
+            th.classList.add(state.sortAsc ? 'sort-asc' : 'sort-desc');
+        }
+    });
+
+    if (displayRows.length === 0) {
+      $tbody.innerHTML = `<tr><td colspan="8" class="empty">沒有符合的資料</td></tr>`;
       return;
     }
 
-    $tbody.innerHTML = rows.map(r => {
-      const opTd = (userLevel === 3)
-        ? `<button class="btn btn-edit" data-action="edit">✏️ 修改</button>
-           <button class="btn btn-delete" data-action="del">🗑️ 刪除</button>`
-        : '';
+    $tbody.innerHTML = displayRows.map(r => {
+      let imgCell = '<span class="muted" style="color:#ccc">無圖片</span>';
+      if (r.result_img_path) {
+          let thumbSrc = r.result_img_path;
+          if (!thumbSrc.startsWith('/')) thumbSrc = '/' + thumbSrc;
+          const linkUrl = r.compare_url || thumbSrc;
+          imgCell = `
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:40px; height:40px; background:#eee; border-radius:4px; overflow:hidden;">
+                    <img src="${thumbSrc}" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'">
+                </div>
+                <a href="${linkUrl}" target="_blank" class="btn btn-sm" style="text-decoration:none;">檢視</a>
+            </div>
+          `;
+      }
+
+      // ★★★ 只有 Level 3 (Super Admin) 才有刪除按鈕 ★★★
+      let adminBtns = '';
+      if (state.userLevel >= 3) {
+        adminBtns = `
+          <td class="admin-col">
+             <button class="btn btn-sm btn-delete" onclick="deleteScore('${r.row_key}')">刪除</button>
+          </td>
+        `;
+      } else if (state.userLevel === 2) {
+         // Level 2 保留空白格，維持排版
+         adminBtns = `<td class="admin-col"></td>`;
+      } else {
+         adminBtns = `<td class="admin-col"></td>`;
+      }
 
       return `
-        <tr data-key="${r.row_key}">
-          <td class="ta-right">${opTd}</td>
+        <tr>
           <td>${r.uid}</td>
-          <td>${r.name || ''}</td>
-          <td>${r.task_id}</td>
-          <td>${r.score ?? ''}</td>
-          <td>${r.test_date ?? ''}</td>
-          ${makeResultCell(r.result_img_path)}
-        </tr>`;
+          <td>${r.name || '—'}</td>
+          <td>${r.task_name || r.task_id}</td>
+          <td><span class="badge ${r.score === null ? 'gray' : ''}">${r.score !== null ? r.score : '—'}</span></td>
+          <td>${r.test_date}</td>
+          <td>${r.time || ''}</td>
+          <td>${imgCell}</td>
+          ${adminBtns}
+        </tr>
+      `;
     }).join('');
   }
 
-  // =========================
-  // 篩選事件
-  // =========================
-  if ($selName) {
-    $selName.addEventListener('change', () => {
-      state.selUserId = $selName.value || '';
-      render();
-    });
-  }
-  if ($selLvl) {
-    $selLvl.addEventListener('change', () => {
-      state.selLevel = $selLvl.value || '';
-      render();
-    });
-  }
+  // ★★★ 全域事件監聽 ★★★
+  document.addEventListener('click', e => {
+      const target = e.target.closest('button');
+      if (!target) return;
+      const action = target.dataset.action;
 
-  // =========================
-  // 工具列事件（清空 / 新增）
-  // =========================
-  document.addEventListener('click', (e) => {
-    const a = e.target.closest?.('[data-action]');
-    if (!a) return;
-    const act = a.dataset.action;
-
-    if (act === 'reset') {
-      if (userLevel < 2) {
-        alert('⚠️ 只有醫療人員可操作此功能');
-        return;
-      }
-      state.selUserId = '';
-      state.selLevel = '';
-      if ($selName) $selName.value = '';
-      if ($selLvl) $selLvl.value = '';
-      if ($tbody) $tbody.innerHTML = '<tr><td colspan="7" class="empty">（已清空）</td></tr>';
-    }
-
-    if (act === 'new') {
-      if (userLevel < 3) return;
-      if (!$dialog) return;
-
-      if ($f_userId) $f_userId.value = '';
-      if ($f_name) $f_name.value = '';
-      if ($f_level) $f_level.value = '';
-      if ($f_score) $f_score.value = '0';
-      if ($f_scoreText) $f_scoreText.textContent = '0';
-      if ($f_testDate) $f_testDate.value = '';
-
-      $dialog.showModal();
-      $dialog.dataset.mode = 'create';
-      $dialog.dataset.key = '';
-    }
-  });
-
-  // =========================
-  // 表格內 Edit / Delete
-  // =========================
-  const $tbodyEl = document.querySelector('[data-role="tbody"]');
-  if ($tbodyEl) {
-    $tbodyEl.addEventListener('click', async (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-
-      const tr = e.target.closest('tr');
-      const rowKey = tr?.getAttribute('data-key');
-      if (!rowKey) return;
-
-      // ---- 刪除 ----
-      if (btn.dataset.action === 'del') {
-        if (userLevel < 2) return;
-        if (!confirm('確定要刪除此分數紀錄？')) return;
-
-        try {
-          const r = await fetch(`/scores?row_key=${encodeURIComponent(rowKey)}`, {
-            method: 'DELETE',
-            credentials: 'include'
-          });
-          const js = await r.json().catch(() => ({}));
-          if (!r.ok || !js.ok) {
-            alert(js.msg || `刪除失敗 (HTTP ${r.status})`);
-            return;
+      if (action === 'reset') {
+          if (state.userLevel === 1) {
+              state.selLevel = '';
+              $selLvl.value = '';
+          } else {
+              state.selUserId = '';
+              $selName.value = '';
+              state.selLevel = '';
+              $selLvl.value = '';
           }
-          await reloadScores();
-          rebuildSelects();
           render();
-        } catch (err) {
-          alert('刪除失敗：' + err);
-        }
-        return;
+      }
+      
+      // 新增紀錄 (只有 Super Admin 能觸發，HTML 已隱藏，這裡做雙重防護)
+      else if (action === 'new') {
+          if (state.userLevel < 3) { alert("權限不足"); return; }
+          
+          editingRowKey = null;
+          $dialog.querySelector('.dlg-title').textContent = "新增測試紀錄";
+          $scoreSection.style.display = 'block';
+          
+          $f_userId.value = state.selUserId || '';
+          $f_name.value = '';
+          $f_level.value = '';
+          $f_score.value = 0;
+          $f_scoreText.textContent = 0;
+          $f_testDate.valueAsDate = new Date();
+          
+          $dialog.showModal();
       }
 
-      // ---- 編輯 ----
-      if (btn.dataset.action === 'edit') {
-        if (userLevel < 3) return;
-        if (!$dialog) return;
+      // 管理使用者 (Admin & Super Admin 皆可)
+      else if (action === 'manage-users') {
+          if (state.userLevel < 2) return;
 
-        const row = state.rows.find(x => x.row_key === rowKey);
-        if (!row) return;
-
-        if ($f_userId) $f_userId.value = row.uid || '';
-        if ($f_name)  $f_name.value  = row.name || '';
-        if ($f_level) $f_level.value = row.task_id || '';
-        if ($f_score) $f_score.value = String(row.score ?? 0);
-        if ($f_scoreText) $f_scoreText.textContent = String(row.score ?? 0);
-        if ($f_testDate) $f_testDate.value = (row.test_date || '').slice(0, 10);
-
-        $dialog.showModal();
-        $dialog.dataset.mode = 'edit';
-        $dialog.dataset.key = rowKey;
+          editingRowKey = 'USER_MODE';
+          $dialog.querySelector('.dlg-title').textContent = "管理使用者 (新增/修改)";
+          $scoreSection.style.display = 'none';
+          
+          $f_userId.value = '';
+          $f_name.value = '';
+          $dialog.close();
+          
+          const uid = prompt("請輸入使用者的 UID (必填):", "");
+          if (!uid) return;
+          const name = prompt("請輸入使用者姓名:", "");
+          const birth = prompt("請輸入生日 (格式: YYYY-MM-DD) 作為密碼:", "2020-01-01");
+          
+          if (uid && birth) {
+              saveUser(uid, name, birth);
+          }
       }
-    });
-  }
 
-  // =========================
-  // 縮圖 / 查看預覽
-  // =========================
-  document.addEventListener('click', (e) => {
-    const el = e.target.closest?.('[data-action="preview"]');
-    if (!el) return;
-
-    let path = el.dataset.path || '';
-    if (!path) return;
-
-    // 清理路徑
-    path = path.replace(/^[\\/]+/, '').replace(/\\/g, '/');
-
-    const win = window.open('', '_blank');
-    if (!win) return;
-
-    // ch1-t2 / ch1-t3：side / top 四張圖
-    const mST = path.match(/^(.*)-(side|top)(\.[^.]+)$/i);
-    let boxesHtml = '';
-
-    if (mST) {
-      const base = mST[1];   // "kid/cc22/ch1-t3"
-      const ext  = mST[3];   // ".jpg"
-
-      const sideOrig = '/artifact/' + `${base}-side${ext}`;
-      const sideRes  = '/artifact/' + `${base}-side_result${ext}`;
-      const topOrig  = '/artifact/' + `${base}-top${ext}`;
-      const topRes   = '/artifact/' + `${base}-top_result${ext}`;
-
-      boxesHtml = `
-        <div class="box">
-          <h2>Side 原始圖</h2>
-          <img src="${sideOrig}" alt="side-original">
-        </div>
-        <div class="box">
-          <h2>Side 結果圖</h2>
-          <img src="${sideRes}" alt="side-result">
-        </div>
-        <div class="box">
-          <h2>Top 原始圖</h2>
-          <img src="${topOrig}" alt="top-original">
-        </div>
-        <div class="box">
-          <h2>Top 結果圖</h2>
-          <img src="${topRes}" alt="top-result">
-        </div>`;
-    } else {
-      // 一般任務：原圖 + 結果圖
-      const origUrl = '/artifact/' + path;
-      let resultPath;
-      const m = path.match(/^(.*)(\.[^.]+)$/);
-      if (m) {
-        resultPath = m[1] + '_result' + m[2];
-      } else {
-        resultPath = path + '_result';
+      else if (action === 'save') {
+          e.preventDefault();
+          const uid = $f_userId.value.trim();
+          const name = $f_name.value.trim();
+          if (!uid) { alert("UID 為必填"); return; }
+          
+          if (editingRowKey === null) {
+              const level = $f_level.value.trim();
+              const score = $f_score.value;
+              const date = $f_testDate.value;
+              
+              if (!level) { alert("關卡代號為必填"); return; }
+              saveScore(uid, name, level, score, date);
+          }
       }
-      const resultUrl = '/artifact/' + resultPath;
-
-      boxesHtml = `
-        <div class="box">
-          <h2>原始圖</h2>
-          <img src="${origUrl}" alt="original">
-        </div>
-        <div class="box">
-          <h2>結果圖</h2>
-          <img src="${resultUrl}" alt="result">
-        </div>`;
-    }
-
-    const html = `
-<!doctype html>
-<html lang="zh-TW">
-<head>
-  <meta charset="utf-8">
-  <title>結果預覽</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 20px;
-      background: #000;
-      color: #fff;
-      font-family: Arial, Helvetica, sans-serif;
-      text-align: center;
-    }
-    .container {
-      width: 100%;
-      display: flex;
-      justify-content: space-evenly;
-      align-items: flex-start;
-      gap: 20px;
-      flex-wrap: wrap;
-    }
-    .box {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 45%;
-      margin-bottom: 20px;
-    }
-    .box h2 {
-      margin-bottom: 10px;
-      font-size: 18px;
-      font-weight: 500;
-    }
-    img {
-      width: 100%;
-      max-height: 80vh;
-      object-fit: contain;
-      background: #222;
-      border-radius: 8px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    ${boxesHtml}
-  </div>
-</body>
-</html>`;
-    win.document.write(html);
-    win.document.close();
   });
 
-  // =========================
-  // Range 文字同步
-  // =========================
-  if ($f_score) {
-    $f_score.addEventListener('input', () => {
-      if ($f_scoreText) $f_scoreText.textContent = $f_score.value;
-    });
-  }
+  $dialog.addEventListener('close', () => {});
+  $f_score.addEventListener('input', e => { $f_scoreText.textContent = e.target.value; });
 
-  // =========================
-  // 儲存（新增 / 修改）
-  // =========================
-  const $saveBtn = $dialog?.querySelector('[data-action="save"]');
-  if ($saveBtn) {
-    $saveBtn.addEventListener('click', async (ev) => {
-      ev.preventDefault();
-      if (userLevel < 3) return;
+  // --- API ---
 
-      const uid = ($f_userId?.value || '').trim();
-      const name = ($f_name?.value || '').trim();
-      const task_id = ($f_level?.value || '').trim();
-      const score = Number($f_score?.value || 0);
-      const test_date = ($f_testDate?.value || '').trim();
-
-      if (!uid || !task_id || !test_date) {
-        alert('請填寫 uid / 關卡 / 測試日期');
-        return;
-      }
-
+  async function saveUser(uid, name, birthday) {
       try {
-        const payload = { uid, task_id, score, test_date };
-        const mode = $dialog?.dataset.mode || 'create';
-        const oldKey = $dialog?.dataset.key || '';
-        if (mode === 'edit' && oldKey) {
-          // 若後端要知道原來的 composite key，可用 row_key_old
-          payload.row_key_old = oldKey;
-        }
-
-        const r = await fetch('/scores/upsert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        const js = await r.json().catch(() => ({}));
-        if (!r.ok || !js.ok) {
-          alert(js.msg || `儲存失敗 (HTTP ${r.status})`);
-          return;
-        }
-
-        await reloadScores();
-        // 若填了 name，就寫回快取資料（user_list 也可以另外更新）
-        if (name) {
-          state.rows
-            .filter(x => x.uid === uid)
-            .forEach(x => { if (!x.name) x.name = name; });
-        }
-        rebuildSelects();
-        render();
-        $dialog.close();
-      } catch (e) {
-        alert('儲存失敗：' + e);
-      }
-    });
+          const r = await fetch('/api/user/upsert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uid, name, birthday })
+          });
+          const js = await r.json();
+          if (js.ok) {
+              alert("使用者儲存成功！");
+              await loadAllUsers();
+              rebuildSelects();
+          } else {
+              alert("失敗: " + js.msg);
+          }
+      } catch (e) { alert("連線錯誤"); }
   }
 
-  // =========================
-  // 排序
-  // =========================
-  document.querySelectorAll('[data-sort]').forEach(el => {
-    el.addEventListener('click', () => {
-      const key = el.dataset.sort; // uid | name | task_id | score | test_date
-      if (state.sortKey === key) {
-        state.sortAsc = !state.sortAsc;
-      } else {
-        state.sortKey = key;
-        state.sortAsc = !(key === 'test_date'); // 預設 test_date 由新到舊
-      }
+  async function saveScore(uid, name, task_id, score, test_date) {
+      try {
+          // 如果有填姓名，Level 3 也可以順便更新個資
+          if (name) {
+              await fetch('/api/user/upsert', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ uid, name, birthday: null })
+              });
+          }
+
+          const r = await fetch('/scores/upsert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uid, task_id, score, test_date })
+          });
+          
+          const js = await r.json();
+          if (js.ok) {
+              alert("紀錄新增成功！");
+              $dialog.close();
+              await loadData();
+              render();
+          } else {
+              alert("失敗: " + js.msg);
+          }
+      } catch (e) { console.error(e); alert("儲存失敗"); }
+  }
+
+  $selName.addEventListener('change', e => { state.selUserId = e.target.value; render(); });
+  $selLvl.addEventListener('change', e => { state.selLevel = e.target.value; render(); });
+  
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (state.sortKey === key) state.sortAsc = !state.sortAsc;
+      else { state.sortKey = key; state.sortAsc = true; }
       render();
     });
   });
 
-  // =========================
-  // 初始化
-  // =========================
-  (async function init() {
-    const ok = await ensureAuth();
-    if (!ok) return;
+  document.getElementById('btn-logout')?.addEventListener('click', async () => {
+      if(confirm('確定要登出嗎？')) { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/'; }
+  });
 
-    // 先拿任務列表（若有）
-    try {
-      const r = await fetch('/tasks', { credentials: 'include' });
-      if (r.ok) {
-        const js = await r.json();
-        if (js.ok && Array.isArray(js.tasks)) state.allLevels = js.tasks;
-      }
-    } catch {
-      // ignore
-    }
+  window.deleteScore = async function(rowKey) {
+      if(state.userLevel < 3) { alert("權限不足：只有超級管理員可以刪除"); return; }
+      if(!confirm('確定要刪除這筆紀錄嗎？此動作無法復原。')) return;
+      try {
+          const r = await fetch(`/scores?row_key=${encodeURIComponent(rowKey)}`, { method: 'DELETE' });
+          const js = await r.json();
+          if(js.ok) { alert('刪除成功'); loadData().then(rebuildSelects).then(render); } else { alert('刪除失敗: ' + js.msg); }
+      } catch(e) { console.error(e); alert('刪除失敗'); }
+  };
 
-    await reloadUsers();
-    await reloadScores();
-
-    rebuildSelects();
-    render();
-  })();
-
+  init();
 })();

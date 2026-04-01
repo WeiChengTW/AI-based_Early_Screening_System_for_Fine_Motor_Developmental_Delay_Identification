@@ -68,7 +68,8 @@ def sort_corners(pts):
 # 主流程
 def analyze_image(img_path):
     # 確保結果目錄存在
-    result_dir = "PDMS2_web/ch4-t1/result"
+    # result_dir = "PDMS2_web/ch4-t1/result"
+    result_dir = os.path.join("PDMS2_web", 'ch4-t1', 'result')
     os.makedirs(result_dir, exist_ok=True)
 
     try:
@@ -177,7 +178,8 @@ def analyze_image(img_path):
             )
 
     # 儲存結果圖片
-    result_path = rf"kid\{uid}\{img_id}_result.jpg"
+    # result_path = rf"kid\{uid}\{img_id}_result.jpg"
+    result_path = os.path.join('kid', uid, f"{img_id}_result.jpg")
     cv2.imwrite(result_path, result_img)
     return score
 
@@ -186,12 +188,14 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         uid = sys.argv[1]
         img_id = sys.argv[2]
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        # image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join('kid', uid, f"{img_id}.jpg")
 
         score = analyze_image(image_path)
         print(f"score : {score}")
         return_score(score)
 
-    image_path = rf"PDMS2_web\ch4-t1\ch4-t1.jpg"
+    # image_path = rf"PDMS2_web\ch4-t1\ch4-t1.jpg"
+    # image_path = os.path.join('kid', uid, f"{img_id}.jpg")
     score = analyze_image(image_path)
     print(f"score : {score}")

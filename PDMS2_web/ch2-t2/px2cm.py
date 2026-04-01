@@ -29,12 +29,12 @@ def get_pixel_per_cm_from_a4(
     if len(approx) != 4:
         raise ValueError("無法偵測 A4 紙四邊形輪廓")
 
-    if show_debug:
-        debug_img = img.copy()
-        cv2.drawContours(debug_img, [approx], -1, (0, 0, 255), 3)
-        cv2.imshow("Detected A4 Contour", cv2.resize(debug_img, (800, 600)))
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+    # if show_debug:
+    #     debug_img = img.copy()
+    #     cv2.drawContours(debug_img, [approx], -1, (0, 0, 255), 3)
+    #     cv2.imshow("Detected A4 Contour", cv2.resize(debug_img, (800, 600)))
+    #     cv2.waitKey(0)
+    #     cv2.destroyAllWindows()
 
     # 整理四個角點
     pts = approx.reshape(4, 2).astype(np.float32)
@@ -155,7 +155,7 @@ def crop_a4_region_simple(image_path, output_folder="cropped_a4"):
 
 # 單獨執行這個檔案時顯示紙張輪廓並儲存裁切區域
 if __name__ == "__main__":
-    image_path = r"demo\1.jpg"
+    image_path = os.path.join("ch2-t2","ch2-t1.jpg")
 
     # 方法1: 完整功能（計算像素比例 + 儲存裁切圖）
     pixel_per_cm, json_path, cropped_path = get_pixel_per_cm_from_a4(

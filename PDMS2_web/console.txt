@@ -1,6 +1,121 @@
-2025-12-02 12:55:07 - INFO - === 遠端 PyMySQL 模式 ===
-2025-12-02 12:55:07 - INFO - Flask 應用程式啟動
-2025-12-02 12:55:07 - INFO - 準備啟動 Flask 應用程式，HOST=127.0.0.1, PORT=8000
-2025-12-02 12:55:07 - INFO - 已設定瀏覽器自動開啟
-2025-12-02 12:55:07 - INFO - Flask 應用程式開始運行
-2025-12-02 12:57:18 - INFO - Flask 應用程式已關閉
+2025-12-13 13:15:15 - INFO - === 遠端 PyMySQL 模式 ===
+2025-12-13 13:15:15 - INFO - Flask 應用程式啟動
+2025-12-13 13:15:15 - INFO - 準備啟動 Flask 應用程式，HOST=127.0.0.1, PORT=8000
+2025-12-13 13:15:15 - INFO - 已設定瀏覽器自動開啟
+2025-12-13 13:15:15 - INFO - Flask 應用程式開始運行
+2025-12-13 13:15:31 - INFO - [REQ] POST /create-uid-folder
+2025-12-13 13:15:31 - INFO - [REQ] 進入 create_uid_folder
+2025-12-13 13:15:32 - INFO - [RESP] POST /create-uid-folder -> 200
+2025-12-13 13:15:33 - ERROR - [ERR] GET /images/icons/house1.jpg
+Traceback (most recent call last):
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "C:\Users\hiimd\Desktop\vscode\Peabody-Developmental-Motor-Scales\PDMS2_web\run.py", line 255, in images_files
+    return send_from_directory(ROOT / "images", filename)
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\helpers.py", line 572, in send_from_directory
+    return werkzeug.utils.send_from_directory(  # type: ignore[return-value]
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\werkzeug\utils.py", line 575, in send_from_directory
+    raise NotFound()
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+2025-12-13 13:15:33 - ERROR - [ERR] GET /images/icons/bridge1.jpg
+Traceback (most recent call last):
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "C:\Users\hiimd\Desktop\vscode\Peabody-Developmental-Motor-Scales\PDMS2_web\run.py", line 255, in images_files
+    return send_from_directory(ROOT / "images", filename)
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\helpers.py", line 572, in send_from_directory
+    return werkzeug.utils.send_from_directory(  # type: ignore[return-value]
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\werkzeug\utils.py", line 575, in send_from_directory
+    raise NotFound()
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+2025-12-13 13:15:33 - ERROR - [ERR] GET /images/icons/tower.jpg
+Traceback (most recent call last):
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "C:\Users\hiimd\Desktop\vscode\Peabody-Developmental-Motor-Scales\PDMS2_web\run.py", line 255, in images_files
+    return send_from_directory(ROOT / "images", filename)
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\helpers.py", line 572, in send_from_directory
+    return werkzeug.utils.send_from_directory(  # type: ignore[return-value]
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\werkzeug\utils.py", line 575, in send_from_directory
+    raise NotFound()
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+2025-12-13 13:15:33 - ERROR - [ERR] GET /images/icons/castle.jpg
+Traceback (most recent call last):
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "C:\Users\hiimd\Desktop\vscode\Peabody-Developmental-Motor-Scales\PDMS2_web\run.py", line 255, in images_files
+    return send_from_directory(ROOT / "images", filename)
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\helpers.py", line 572, in send_from_directory
+    return werkzeug.utils.send_from_directory(  # type: ignore[return-value]
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\werkzeug\utils.py", line 575, in send_from_directory
+    raise NotFound()
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+2025-12-13 13:15:33 - ERROR - [ERR] GET /images/icons/maze1.jpg
+Traceback (most recent call last):
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "C:\Users\hiimd\Desktop\vscode\Peabody-Developmental-Motor-Scales\PDMS2_web\run.py", line 255, in images_files
+    return send_from_directory(ROOT / "images", filename)
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\helpers.py", line 572, in send_from_directory
+    return werkzeug.utils.send_from_directory(  # type: ignore[return-value]
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\werkzeug\utils.py", line 575, in send_from_directory
+    raise NotFound()
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+2025-12-13 13:15:33 - ERROR - [ERR] GET /images/icons/treasure1.jpg
+Traceback (most recent call last):
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "C:\Users\hiimd\Desktop\vscode\Peabody-Developmental-Motor-Scales\PDMS2_web\run.py", line 255, in images_files
+    return send_from_directory(ROOT / "images", filename)
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\helpers.py", line 572, in send_from_directory
+    return werkzeug.utils.send_from_directory(  # type: ignore[return-value]
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\werkzeug\utils.py", line 575, in send_from_directory
+    raise NotFound()
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+2025-12-13 13:15:33 - ERROR - [ERR] GET /images/icons/stairs.jpg
+Traceback (most recent call last):
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "C:\Users\hiimd\Desktop\vscode\Peabody-Developmental-Motor-Scales\PDMS2_web\run.py", line 255, in images_files
+    return send_from_directory(ROOT / "images", filename)
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\helpers.py", line 572, in send_from_directory
+    return werkzeug.utils.send_from_directory(  # type: ignore[return-value]
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\werkzeug\utils.py", line 575, in send_from_directory
+    raise NotFound()
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+2025-12-13 13:15:33 - ERROR - [ERR] GET /images/icons/brick.jpg
+Traceback (most recent call last):
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "C:\Users\hiimd\Desktop\vscode\Peabody-Developmental-Motor-Scales\PDMS2_web\run.py", line 255, in images_files
+    return send_from_directory(ROOT / "images", filename)
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\flask\helpers.py", line 572, in send_from_directory
+    return werkzeug.utils.send_from_directory(  # type: ignore[return-value]
+  File "C:\Users\hiimd\miniconda3\envs\cnn39\lib\site-packages\werkzeug\utils.py", line 575, in send_from_directory
+    raise NotFound()
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+2025-12-13 14:18:52 - INFO - Flask 應用程式已關閉

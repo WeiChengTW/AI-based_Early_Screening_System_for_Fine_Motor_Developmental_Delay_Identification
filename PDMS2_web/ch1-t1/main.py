@@ -2,12 +2,15 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 import sys
+import os
 
 # ================== 裁剪設定 ==================
 CROP_RATIO = 0.85
 
 # ================== YOLO 模型 ==================
+# 請確保模型路徑正確
 model = YOLO(r"ch1-t1/toybrick.pt")
+# model = YOLO(r"toybrick.pt")
 CONF = 0.5
 
 
@@ -128,6 +131,9 @@ def draw_block_markers(frame, boxes, masks, is_correct):
         print("警告: boxes 和 is_correct 列表長度不匹配。")
         return frame
 
+    # 繪製標記點時使用一個副本，避免修改到傳入的 frame (視需求而定，這裡為了安全起見使用副本)
+    frame_to_draw = frame.copy()
+
     for i, box in enumerate(boxes):
         x1, y1, x2, y2 = box
 
@@ -141,13 +147,13 @@ def draw_block_markers(frame, boxes, masks, is_correct):
         # 紅色 (0, 0, 255) 代表錯誤 (Incorrect)
         color = (0, 255, 0) if is_correct[i] else (0, 0, 255)
 
-        # 繪製中心點 (圓形)
-        cv2.circle(frame, center, radius=10, color=color, thickness=-1)
+        # 繪製中心點 (圓形)，稍微加大半徑以便觀察
+        cv2.circle(frame_to_draw, center, radius=5, color=color, thickness=-1)
 
         # 繪製邊界框 (可選，用於確認偵測範圍)
-        # cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        # cv2.rectangle(frame_to_draw, (x1, y1), (x2, y2), color, 2)
 
-    return frame
+    return frame_to_draw
 
 
 # ================== 封裝：讀取 img_path 並回傳 score ==================
@@ -163,20 +169,21 @@ def score_from_image(img_path, conf=CONF):
     # ===== 新增: 中心裁剪 75% 區域 =====
     img = crop_center(img, CROP_RATIO)
     # ==================================
+
     display_frame = img.copy()
 
     # 灰階 + 模糊
     gray = cv2.cvtColor(display_frame, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (17, 17), 0)
+    blurred = cv2.GaussianBlur(gray, (11, 11), 0)
 
     # 自適應二值化：將深色的繩子凸顯出來
     binary = cv2.adaptiveThreshold(
-        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 10
+        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 33, 10
     )
 
     # 閉運算去雜點
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    # binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
     # YOLO 偵測方塊 & 取得 mask
     # 由於 YOLO 模型會自動縮放圖片，因此這裡傳入裁剪後的 display_frame 即可
@@ -189,37 +196,47 @@ def score_from_image(img_path, conf=CONF):
 
     # 骨架化
     skeleton = extract_line_skeleton(binary_masked)
+
     # 檢查每個方塊是否靠近骨架
+    # 注意：這裡的 tol 可以根據實際圖片解析度調整。50 可能有點大，如果誤判多請調小。
     is_correct = []
     correct_num = 0
     for mask in masks:
-        is_near = is_mask_near_skeleton(mask, skeleton, tol=10)
+        is_near = is_mask_near_skeleton(mask, skeleton, tol=50)
         is_correct.append(is_near)
         if is_near:
             correct_num += 1
 
-    # 在所有圖像上繪製標記
-    # 原始圖 (BGR)
-    display_frame_with_markers = draw_block_markers(
-        display_frame, boxes, masks, is_correct
+    # ================== 新增功能：繪製骨架 ==================
+    # 準備一個用於視覺化的底圖副本
+    visualization_base = display_frame.copy()
+
+    # 為了讓骨架在結果圖中更容易看清，先稍微膨脹一下骨架線條
+    # 使用 3x3 的核進行膨脹
+    kernel_disp = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    skeleton_dilated_for_display = cv2.dilate(skeleton, kernel_disp)
+
+    # 找出骨架 (白色像素) 的位置
+    skel_ys, skel_xs = np.where(skeleton_dilated_for_display > 0)
+
+    # 在底圖上將這些位置塗成顯眼的顏色 (例如黃色 BGR: 0, 255, 255)
+    # 這樣骨架就會顯示在原圖上
+    visualization_base[skel_ys, skel_xs] = [0, 255, 255]
+    # ========================================================
+
+    # 在已經畫好黃色骨架的圖像上繪製紅綠標記點
+    final_result_img = draw_block_markers(
+        visualization_base, boxes, masks, is_correct
     )
 
-    # 二值遮罩圖 (GRAY/BGR)
-    # 將單通道的二值圖轉為三通道才能繪製彩色標記
-    binary_bgr = cv2.cvtColor(binary_masked, cv2.COLOR_GRAY2BGR)
-    binary_with_markers = draw_block_markers(binary_bgr, boxes, masks, is_correct)
-    # 骨架圖 (GRAY/BGR)
-    skeleton_bgr = cv2.cvtColor(skeleton, cv2.COLOR_GRAY2BGR)
-    skeleton_with_markers = draw_block_markers(skeleton_bgr, boxes, masks, is_correct)
-
-    # 這裡的顯示程式碼已經被註釋，如果需要預覽，請取消註釋
-    # # 顯示所有結果圖
-    # display_frame_resized = cv2.resize(display_frame_with_markers, (0, 0), fx=0.3, fy=0.3)
-    # cv2.imshow('Original with Markers', display_frame_resized)
-    # binary_resized = cv2.resize(binary_with_markers, (0, 0), fx=0.3, fy=0.3)
-    # cv2.imshow('Binary Masked', binary_resized)
-    # skeleton_resized = cv2.resize(skeleton_with_markers, (0, 0), fx=0.3, fy=0.3)
-    # cv2.imshow('Skeleton Line', skeleton_resized)
+    # (以下為舊的除錯顯示程式碼，保持註解)
+    # # 二值遮罩圖 (GRAY/BGR)
+    # binary_bgr = cv2.cvtColor(binary_masked, cv2.COLOR_GRAY2BGR)
+    # binary_with_markers = draw_block_markers(binary_bgr, boxes, masks, is_correct)
+    #
+    # # 骨架圖 (GRAY/BGR)
+    # skeleton_bgr = cv2.cvtColor(skeleton, cv2.COLOR_GRAY2BGR)
+    # skeleton_with_markers = draw_block_markers(skeleton_bgr, boxes, masks, is_correct)
 
     # 計算分數 (沿用您的計分邏輯)
     correct_num_for_score = correct_num
@@ -232,10 +249,12 @@ def score_from_image(img_path, conf=CONF):
         score = 1
     else:
         score = 0
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
 
-    return score, correct_num, display_frame_with_markers
+    # 如果在伺服器端運行，通常不需要 waitKey 和 destroyAllWindows
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    return score, correct_num, final_result_img
 
 
 if __name__ == "__main__":
@@ -243,16 +262,34 @@ if __name__ == "__main__":
         # 使用傳入的 uid 和 id 作為圖片路徑
         uid = sys.argv[1]
         img_id = sys.argv[2]
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        # 使用 os.path.join 處理跨平台路徑問題
+        image_path = os.path.join("kid", uid, f"{img_id}.jpg")
     else:
         # 測試圖片路徑 (請替換為實際測試路徑)
-        print("請提供 uid 和 img_id 參數或在程式碼中設定測試路徑。")
+        # image_path = "test.jpg" # 如果沒有參數，請在這裡指定一個存在的圖片
+        print("請提供 uid 和 img_id 參數，例如: python main.py 1202 ch1-t1")
         sys.exit(0)
 
-    # image_path = r"ch1-t1.jpg"  # 讀取圖片
-    score, num, result_img = score_from_image(image_path)
-    cv2.imwrite(rf"kid\{uid}\{img_id}_result.jpg", result_img)
-    # score, num = score_from_image(test_img)
-    print("score =", score)
-    print("num =", num)
-    return_score(score)
+    print(f"Processing image: {image_path}")
+
+    try:
+        score, num, result_img = score_from_image(image_path)
+
+        # 確保輸出目錄存在
+        output_dir = os.path.join("kid", uid)
+        os.makedirs(output_dir, exist_ok=True)
+
+        save_path = os.path.join(output_dir, f"{img_id}_result.jpg")
+        cv2.imwrite(save_path, result_img)
+
+        print(f"Result saved to: {save_path}")
+        print("score =", score)
+        print("num =", num)
+        return_score(score)
+
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        sys.exit(1)

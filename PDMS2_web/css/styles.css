@@ -350,27 +350,6 @@ body {
   }
 }
 
-/* ========= 圖示基本樣式 ========= */
-#storyEmoji,
-.sticker .emoji,
-.task-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#storyEmoji .icon-img,
-.sticker .emoji .icon-img {
-  width: 56px;
-  height: 56px;
-  object-fit: contain;
-}
-
-.task-icon .icon-img {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-}
 
 /* 停止朗讀按鈕：紅底白字 */
 #stopBtn {
@@ -390,32 +369,54 @@ body {
   background-color: #c0392b; /* 滑鼠移上去深紅 */
 }
 
-/* SVG 圖示樣式 */
-.emoji svg,
-.task-icon svg,
-#storyEmoji svg {
-  width: 100%;
-  height: 100%;
-  display: block;
+/* confetti 彩紙 */
+.confetti-piece {
+  position: absolute;
+  width: 10px;
+  height: 18px;
+  border-radius: 4px;
+  opacity: 0.9;
 }
 
-/* 確保 sticker 按鈕中的 emoji 容器有尺寸 */
-.sticker .emoji {
-  width: 48px;
-  height: 48px;
+/* ========= 圖示基本樣式（全部改用 PNG） ========= */
+
+/* 共用：icon 容器都置中 */
+#storyEmoji,
+.sticker .emoji,
+.task-icon {
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* 任務卡片的圖示 */
-.task-icon {
-  width: 60px;
-  height: 60px;
+/* 預設 icon：寬度跟著容器走，不再寫死 800px 那種超大值 */
+.icon-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;  /* 保持比例，不會被拉扁 */
 }
 
-/* 故事區塊的大圖示 */
-#storyEmoji {
-  width: 80px;
-  height: 80px;
+/* ---- 頂端「第 1 關～第 5 關」貼紙 ---- */
+.sticker {
+  position: relative;
+  overflow: hidden;      /* ← 超出去的圖示直接被剪掉，不會蓋到旁邊 */
 }
+
+.sticker .emoji {
+  width: 120px;          /* 貼紙裡的圖示容器大小（你可以再微調） */
+  height: 120px;
+}
+
+/* ---- 中間故事卡片的大圖示（左邊那顆） ---- */
+#storyEmoji {
+  width: 120px;
+  height: 120px;
+}
+
+/* ---- 下方每張任務卡片裡的圖示 ---- */
+.task-icon {
+  width: 90px;
+  height: 90px;
+}
+

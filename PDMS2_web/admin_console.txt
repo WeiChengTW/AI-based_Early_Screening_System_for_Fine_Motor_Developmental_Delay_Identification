@@ -1,0 +1,17 @@
+2025-12-09 14:35:45 - INFO - === 遠端 PyMySQL 模式 ===
+2025-12-09 14:35:45 - INFO - Flask 應用程式啟動
+2025-12-09 14:35:45 - INFO - 準備啟動 Flask 應用程式，HOST=127.0.0.1, PORT=5050
+2025-12-09 14:35:45 - INFO - 已設定瀏覽器自動開啟
+2025-12-09 14:35:45 - INFO - Flask 應用程式開始運行
+2025-12-09 14:36:36 - INFO - [RESP] GET /artifact/kid/I889900112/ch2-t5.jpg -> 404
+2025-12-09 14:36:36 - INFO - [RESP] GET /artifact/kid/C223344556/ch2-t3.jpg -> 404
+2025-12-09 14:36:36 - INFO - [RESP] GET /artifact/kid/B131512345/ch4-t1.jpg -> 404
+2025-12-09 14:36:36 - INFO - [RESP] GET /artifact/kid/M303030303/ch2-t5.jpg -> 404
+2025-12-09 14:36:36 - INFO - [RESP] GET /artifact/kid/B131512345/ch3-t2.jpg -> 404
+2025-12-09 14:36:36 - INFO - [RESP] GET /artifact/kid/L202020202/ch2-t5.jpg -> 404
+2025-12-09 14:36:36 - INFO - [RESP] GET /artifact/kid/B131512345/ch2-t6.jpg -> 404
+2025-12-09 14:36:36 - INFO - [RESP] GET /artifact/kid/B131512345/ch2-t4.jpg -> 404
+2025-12-09 14:36:36 - INFO - [RESP] GET /artifact/kid/A123456789/ch1-t2.jpg -> 404
+2025-12-09 14:37:07 - ERROR - [HTTPERR 404] GET /api/admin/list - The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-12-09 14:37:07 - INFO - [RESP] GET /api/admin/list -> 404
+2025-12-09 14:40:12 - INFO - Flask 應用程式已關閉

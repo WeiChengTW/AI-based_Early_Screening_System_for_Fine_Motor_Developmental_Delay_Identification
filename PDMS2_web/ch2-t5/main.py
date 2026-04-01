@@ -16,15 +16,18 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         uid = sys.argv[1]
         img_id = sys.argv[2]
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join("kid", uid, f'{img_id}.jpg')
     else:
         print("參數不足，需要 uid 與 img_id")
         return_score(0)
 
     # === 中途輸出路徑（裁紙後）===
-    out_dir = r"PDMS2_web\ch2-t5\new"
+    # out_dir = r"PDMS2_web\ch2-t5\new"
+    out_dir = os.path.join("ch2-t5", "new")
+
     os.makedirs(out_dir, exist_ok=True)
-    out_path = rf"{out_dir}\new{img_id}.jpg"
+    # out_path = rf"{out_dir}\new{img_id}.jpg"
+    out_path = os.path.join(out_dir, f"new{img_id}.jpg")
 
     # ========= 1) 裁紙（偵測 A4） =========
     warped = get_pixel_per_cm_from_a4(image_path, show_debug=False)
@@ -55,10 +58,10 @@ if __name__ == "__main__":
     )
 
     # ========= 4) 最終結果圖（給 admin 預覽的）=========
-    result_dir = rf"kid\{uid}"
+    result_dir = os.path.join("kid", uid)
     os.makedirs(result_dir, exist_ok=True)
-    result_path = rf"{result_dir}\{img_id}_result.jpg"
-
+    
+    result_path = os.path.join(result_dir, f"{img_id}_result.jpg")
     cv2.imwrite(result_path, result_img)
 
     print("完成結果圖：", result_path)

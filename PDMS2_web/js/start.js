@@ -21,43 +21,53 @@ const STORY_HOME = "/html/index.html";
     btn.disabled = true;
     btn.textContent = "創建中...";
 
-    try {
-      // 調用API創建資料夾
+        try {
+      // ⭐ 先送 request 到後端 /create-uid-folder
       const response = await fetch("/create-uid-folder", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ uid: uid }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid }),
       });
 
+      // ⭐ 再把 response 轉成 JSON
       const result = await response.json();
 
       if (result.success) {
         // UID 已由後端存入 session，同時備份到 localStorage
-        const KEY = "kid-quest-progress-v1";
-        const st = JSON.parse(localStorage.getItem(KEY) || "{}");
+        const META_KEY = "kid-quest-progress-v1-meta";
+        const st = JSON.parse(localStorage.getItem(META_KEY) || "{}");
         st.currentUid = uid;
-        localStorage.setItem(KEY, JSON.stringify(st));
-        
-        // 成功創建資料夾，跳轉到故事首頁（不需要 URL 參數）
-        setTimeout(() => { 
-          window.location.href = STORY_HOME; 
+        localStorage.setItem(META_KEY, JSON.stringify(st));
+
+        // 成功建立/載入 UID，跳轉到故事首頁
+        setTimeout(() => {
+          window.location.href = STORY_HOME;
         }, 180);
+
       } else {
-        // 顯示錯誤訊息
-        alert(`錯誤: ${result.error}`);
+        // ⭐ 專門處理 UID 不存在
+        if (result.code === "USER_NOT_FOUND") {
+          alert("此使用者不存在，請聯絡管理者新增帳號");
+        } else {
+          alert(`錯誤: ${result.error}`);
+        }
+
         btn.disabled = false;
         btn.textContent = "進入故事";
         btn.style.transform = "";
       }
+
     } catch (error) {
-      console.error("創建資料夾時發生錯誤:", error);
-      alert("創建資料夾時發生錯誤，請稍後再試");
+      console.error("建立資料夾時發生錯誤:", error);
+
+      const msg = (error && error.message) ? error.message : String(error);
+      alert("建立資料夾時發生錯誤：" + msg);
+
       btn.disabled = false;
       btn.textContent = "進入故事";
       btn.style.transform = "";
     }
+
   };
 
   btn.addEventListener("click", go);

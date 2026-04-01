@@ -22,7 +22,7 @@ class SquareGapAnalyzer:
         # —— 是否強制用形態學骨架（避免 ximgproc 差異）——
         force_morph: bool = False,
         # —— 輸出資料夾 ——
-        out_dir: str = "PDMS2_web\\ch2-t2\\output",
+        out_dir: str = os.path.join("PDMS2_web", "ch2-t2", "output"),
     ):
         # 輸出資料夾
         self.OUT_DIR = out_dir

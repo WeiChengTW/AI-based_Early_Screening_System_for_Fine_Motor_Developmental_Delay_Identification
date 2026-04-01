@@ -16,9 +16,11 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-target_dir = BASE_DIR.parent / "ch2-t3"
-MODEL_PATH = BASE_DIR.parent / "ch2-t3" / "model" / "cross_final.h5"
+# target_dir = BASE_DIR.parent / "ch2-t3"
+target_dir = os.path.join(BASE_DIR.parent, "ch2-t3")
 
+# MODEL_PATH = BASE_DIR.parent / "ch2-t3" / "model" / "cross_final.h5"
+MODEL_PATH = os.path.join(BASE_DIR.parent, "ch2-t3", "model", "cross_final.h5")
 
 def return_score(score):
     sys.exit(int(score))
@@ -29,7 +31,7 @@ def get_pixel_per_cm_from_a4(
     real_width_cm=29.7,
     show_debug=False,
     save_cropped=True,
-    output_folder=target_dir / "cropped_a4",
+    output_folder=os.path.join(target_dir, "cropped_a4"),
 ):
     img = cv2.imread(image_path)
     if img is None:
@@ -114,7 +116,7 @@ def get_pixel_per_cm_from_a4(
         print(f"A4區域已儲存至: {cropped_path}")
 
     # 儲存像素比例資料
-    json_path = "PDMS2_web/px2cm.json"
+    json_path = os.path.join("PDMS2_web", "px2cm.json")
     # data = {
     #     "pixel_per_cm": pixel_per_cm,
     #     "image_path": image_path,
@@ -182,10 +184,12 @@ def main(img_path):
     # all_images = read_all_images_from_folder(input_folder)
 
     ## 先建立分類資料夾
-    cross_dir = target_dir / "Cross"
-    other_dir = target_dir / "other"
-    os.makedirs(cross_dir / "Cross", exist_ok=True)
-    os.makedirs(other_dir / "other", exist_ok=True)
+    cross_dir = os.path.join(target_dir, "Cross")
+
+    other_dir = os.path.join(target_dir, "other")
+
+    os.makedirs(os.path.join(cross_dir, "Cross"), exist_ok=True)
+    os.makedirs(os.path.join(other_dir, "other"), exist_ok=True)
 
     classifier = ImageClassifier(MODEL_PATH, CLASS_NAMES)
 
@@ -201,18 +205,20 @@ def main(img_path):
             img_path,
             show_debug=False,  # 關掉視覺化避免卡住
             save_cropped=True,
-            output_folder=target_dir / "cropped_a4",
+            output_folder=os.path.join(target_dir, "cropped_a4"),
         )
         try:
-            with open("PDMS2_web/px2cm.json", "r") as f:
+            with open(os.path.join("PDMS2_web", "px2cm.json"), "r") as f:
                 data = json.load(f)
                 pixel_per_cm = data["pixel_per_cm"]
         except FileNotFoundError:
             pixel_per_cm = 47.4416628993705  # 預設值
         print(f"{img_path} pixel_per_cm = {pixel_per_cm}")
     except ValueError as e:
+        img = cv2.imread(img_path)
         print(f"⚠️ 跳過 {img_path}：{e}")
-        return SCORE
+        return 0, img
+
     
     # 參數要改
     cs = CrossScorer(
@@ -220,12 +226,12 @@ def main(img_path):
     )
     
     # 單張處理
-    print(f"\n=== 處理 {img_path} ===\n")
+    print(f"\n=== 處理 {cropped_path} ===\n")
 
     # 裁切圖形
     print("\n==裁切圖形==")
     # print(cropped_path)
-    ready = segmenter.infer_and_draw(img_path)
+    ready = segmenter.infer_and_draw(cropped_path)
 
     # 分類圖形
     print("\n==分類圖形==\n")
@@ -240,7 +246,7 @@ def main(img_path):
 
             # 直接分類存檔
             if predicted_class_name == "cross":
-                shutil.copy(url, cross_dir / os.path.basename(url))
+                shutil.copy(url, os.path.join(cross_dir, os.path.basename(url)))
                 results, result_img, _, _, _ = cs.score_image(url)
                 return results["score"], result_img
 
@@ -256,12 +262,12 @@ def main(img_path):
                     (0, 0, 255),
                     2,
                 )
-                save_path = other_dir / os.path.basename(url)
+                save_path = os.path.join(other_dir, os.path.basename(url))
                 cv2.imwrite(save_path, img)  # 直接存檔，不用手動關視窗
                 print(f"{url} 已存入 Other 資料夾並加上標記")
                 return 0, img
 
-    return SCORE
+    return SCORE, None
 
 
 if __name__ == "__main__":
@@ -269,11 +275,14 @@ if __name__ == "__main__":
         # 使用傳入的 uid 和 id 作為圖片路徑
         uid = sys.argv[1]
         img_id = sys.argv[2]
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        # image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join('kid',uid, f"{img_id}.jpg")
     # img_path = r'S__75628564.jpg'
     # image_path = r'ch2-t3.jpg'
     score, result_img = main(image_path)
-    cv2.imwrite(rf"kid\{uid}\{img_id}_result.jpg", result_img)
+
+    result_path = os.path.join('kid',uid, f"{img_id}_result.jpg")
+    cv2.imwrite(result_path, result_img)
     # cv2.imwrite(rf"result.jpg", result_img)
     print(score)
     return_score(score)

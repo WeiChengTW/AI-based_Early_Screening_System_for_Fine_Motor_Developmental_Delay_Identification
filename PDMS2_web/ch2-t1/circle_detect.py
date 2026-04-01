@@ -9,8 +9,10 @@ import cv2
 # -------------------------
 # 參數設定
 # -------------------------
-MODEL_PATH = r'model/check_circle.h5'
-IMAGE_DIR = r'pic_result\Result'   # 放要辨識的圖片資料夾
+# MODEL_PATH = r'model/check_circle.h5'
+MODEL_PATH = os.path.join('model', "check_circle.h5")
+# IMAGE_DIR = r'pic_result\Result'   # 放要辨識的圖片資料夾
+IMAGE_DIR = os.path.join('pic_result','Result')
 IMAGE_SIZE = (224, 224)         # 跟訓練模型時一樣
 CLASS_NAMES = ['Other', 'circle_or_oval']  # 對應你的類別名稱
 

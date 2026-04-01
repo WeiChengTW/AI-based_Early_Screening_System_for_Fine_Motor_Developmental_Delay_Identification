@@ -12,9 +12,7 @@
 !PDMS2_web/images/*.png
 
 # 追蹤 PDMS2_web/kid 資料夾內的圖片
-!PDMS2_web/kid/
-!PDMS2_web/kid/*.jpg
-!PDMS2_web/kid/*.png
+
 !PDMS2_web/kid/*.jpeg
 !PDMS2_web/kid/*.mp4
 

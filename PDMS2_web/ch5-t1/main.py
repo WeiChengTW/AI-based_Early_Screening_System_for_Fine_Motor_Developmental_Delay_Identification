@@ -59,22 +59,30 @@ def main(CAMERA_INDEX, VIDEO_PATH, UID):
     print("遊戲狀態已初始化並儲存")
 
     # 初始化模型
-    model = YOLO(r'ch5-t1/bean_model.pt')
+    # 注意：請確認模型路徑是否正確，網頁呼叫時路徑可能需要絕對路徑
+    model_path = r'ch5-t1/bean_model.pt'
+    if not os.path.exists(model_path):
+         # 嘗試用絕對路徑 (如果在 run.py 同層目錄下有 ch5-t1 資料夾)
+         model_path = str(Path(__file__).parent / 'bean_model.pt')
+    
+    print(f"Loading model from: {model_path}")
+    model = YOLO(model_path)
     
     # 嘗試開啟相機（加入重試機制）
     max_retries = 3
     retry_delay = 1  # 秒
     
+    cap = None
     for attempt in range(max_retries):
         print(f"嘗試開啟相機 (索引 {CAMERA_INDEX})，第 {attempt + 1}/{max_retries} 次...")
-        cap = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW)  # Windows 使用 DirectShow
+        cap = cv2.VideoCapture(CAMERA_INDEX)  # Windows 使用 DirectShow
         
         if cap.isOpened():
             print("相機開啟成功！")
             break
         
         print(f"開啟失敗，等待 {retry_delay} 秒後重試...")
-        cap.release()
+        # cap.release() # 如果沒開成，其實不用 release，但加了也無妨
         time.sleep(retry_delay)
     else:
         # 所有嘗試都失敗
@@ -116,8 +124,8 @@ def main(CAMERA_INDEX, VIDEO_PATH, UID):
     game_state["running"] = True
     print("遊戲開始！")
     
-    # 建立顯示視窗
-    cv2.namedWindow('Bean Detection - Press Q to Quit', cv2.WINDOW_NORMAL)
+    # [修正] 移除 namedWindow，避免 headless 環境報錯
+    # cv2.namedWindow('Bean Detection - Press Q to Quit', cv2.WINDOW_NORMAL)
 
     while True:
         ret, frame = cap.read()
@@ -145,7 +153,7 @@ def main(CAMERA_INDEX, VIDEO_PATH, UID):
             print(f"開始錄影: {frame_size} @ {fps} FPS, 路徑: {VIDEO_PATH}")
 
         current_box_count = 0
-        display_frame = frame.copy()  # 複製一份用於顯示
+        display_frame = frame.copy()  # 複製一份用於顯示(雖然現在不顯示了，但保留繪圖邏輯)
         
         if game_started:
             results = model.predict(source=frame, conf=CONF, verbose=False)
@@ -186,19 +194,19 @@ def main(CAMERA_INDEX, VIDEO_PATH, UID):
             game_state["bean_count"] = current_box_count
             game_state["remaining_time"] = int(remaining_time)
             
-            # 在畫面上顯示資訊
+            # 在畫面上顯示資訊 (雖然不顯示視窗，但會被錄進影片)
             info_y = 30
             cv2.putText(display_frame, f'Bean Count: {current_box_count}', (10, info_y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
             cv2.putText(display_frame, f'Time: {int(remaining_time)}s', (10, info_y + 40),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
             
             if WARNING:
                 cv2.putText(display_frame, 'WARNING!', (10, info_y + 80),
-                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
             
-            # 每0.1秒儲存一次狀態
-            if frame_count % 10 == 0:
+            # 每0.1秒儲存一次狀態 (約每3幀)
+            if frame_count % 3 == 0:
                 save_game_state(UID, game_state)
 
             SCORE = calculate_score(current_box_count, remaining_time, WARNING)
@@ -208,63 +216,74 @@ def main(CAMERA_INDEX, VIDEO_PATH, UID):
                 game_state["running"] = False
                 save_game_state(UID, game_state)
 
-                # 顯示最終分數
+                # 顯示最終分數 (寫入影片)
                 cv2.putText(display_frame, f'GAME OVER - Score: {SCORE}', 
-                           (display_frame.shape[1]//2 - 200, display_frame.shape[0]//2),
-                           cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 255), 3)
+                            (display_frame.shape[1]//2 - 200, display_frame.shape[0]//2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 255), 3)
 
                 if video_writer is not None:
-                    video_writer.write(frame)
+                    video_writer.write(display_frame) # 寫入最後一幀帶有 Game Over 的畫面
                 
-                # 顯示結束畫面 2 秒
-                cv2.imshow('Bean Detection - Press Q to Quit', display_frame)
-                cv2.waitKey(2000)
+                # [修正] 移除 imshow 和 waitKey，改用 sleep
+                # cv2.imshow('Bean Detection - Press Q to Quit', display_frame)
+                # cv2.waitKey(2000)
+                time.sleep(2)
                 
                 print(f"score : {SCORE}\n")
                 break
         
-        # 顯示畫面
-        cv2.imshow('Bean Detection - Press Q to Quit', display_frame)
+        # [修正] 移除主迴圈顯示
+        # cv2.imshow('Bean Detection - Press Q to Quit', display_frame)
         
-        # 錄影（錄製原始畫面，不包含標註）
+        # 錄影（錄製原始畫面 + 標註）
+        # 注意：你原本是 write(frame)，這樣錄進去的是乾淨畫面
+        # 如果你想錄製有框線的畫面，請改用 write(display_frame)
         if recording and video_writer is not None:
-            video_writer.write(frame)
+            video_writer.write(display_frame) 
 
-        # 檢查是否按下 Q 鍵退出
-        if cv2.waitKey(1) & 0xFF in [ord('q'), ord('Q')]:
-            print("使用者按下 Q 鍵，結束遊戲")
-            break
+        # 檢查是否按下 Q 鍵退出 (Web模式下無法按鍵，故註解)
+        # if cv2.waitKey(1) & 0xFF in [ord('q'), ord('Q')]:
+        #     print("使用者按下 Q 鍵，結束遊戲")
+        #     break
 
     # 清理資源
     if video_writer is not None:
         video_writer.release()
         print(f"錄影已儲存: {VIDEO_PATH}")
 
-    cap.release()
+    if cap is not None:
+        cap.release()
     cv2.destroyAllWindows()
     return 0 if SCORE == -1 else SCORE
 
 if __name__ == "__main__":
     UID = None
-    CAMERA_INDEX = 0  # 預設改為 0（因為只有一個相機）
+    # [注意] 這裡你硬編碼了 CAMERA_INDEX = 6
+    # 如果這不是故意的，請改回 int(sys.argv[2]) 或是 0
+    CAMERA_INDEX = 6
     
     if len(sys.argv) >= 3:
         try:
             UID = sys.argv[1]
-            CAMERA_INDEX = int(sys.argv[2])
+            # CAMERA_INDEX = int(sys.argv[2])
+            CAMERA_INDEX = 6 # 強制覆蓋為 6
             print(f"從 run.py 接收到 UID: {UID}, 相機索引: {CAMERA_INDEX}")
         except Exception as e:
             print(f"錯誤：無法解析參數: {e}")
             sys.exit(-1)
     else:
-        print(f"錯誤：缺少 UID 和相機索引參數")
-        sys.exit(-1)
+        # 方便手動測試用
+        print(f"警告：缺少參數，使用預設值測試")
+        UID = "test_user"
+        CAMERA_INDEX = 6 # 測試用
 
     # 建立輸出路徑
     BASE_DIR = Path(__file__).parent.parent
     OUTPUT_DIR = BASE_DIR / "kid" / UID
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    VIDEO_PATH = OUTPUT_DIR / "Ch5-t1_result.mp4"
+    # VIDEO_PATH = OUTPUT_DIR / "Ch5-t1_result.mp4"
+
+    VIDEO_PATH = os.path.join(BASE_DIR, 'kid', UID, "Ch5-t1_result.mp4")
     
     print(f"影片將儲存至: {VIDEO_PATH}")
 

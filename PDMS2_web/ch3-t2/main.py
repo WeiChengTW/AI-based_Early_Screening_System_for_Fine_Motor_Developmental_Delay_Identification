@@ -27,12 +27,13 @@ if __name__ == "__main__":
         img_id = sys.argv[2]
         # uid = "lull222"
         # img_id = "ch3-t1"
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        # image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join('kid', uid, f'{img_id}.jpg')
         # img = 1
         # for img in range(1, 5):
         #     image_path = rf"raw\img{img}.jpg"
         # _, json_path = get_pixel_per_cm_from_a4(rf"a4.jpg", show_debug=False)
-        json_path = BASE_DIR.parent / "px2cm.json"
+        json_path = os.path.join(BASE_DIR.parent, "px2cm.json")
         if json_path is not None:
             with open(json_path, "r") as f:
                 data = json.load(f)
@@ -54,16 +55,18 @@ if __name__ == "__main__":
                     new_height = int(height * scale)
                     region = cv2.resize(region, (new_width, new_height))
                 # cv2.imshow("提取的紙張區域", region)
-                detector_path = detector.save_results()
+                detector_img = detector.save_results()
                 detector.show_results()
-                D_sq_path, black_corners_int = Draw_square(detector_path)
-                if D_sq_path is not None:
-
+                D_sq_img, black_corners_int = Draw_square(detector_img)
+                if D_sq_img is not None:
+                    
+                    # cv2.imwrite(os.path.join('kid', uid, f'{img_id}_result.jpg'), D_sq_img)
                     analyzer = BoxDistanceAnalyzer(
-                        box1=black_corners_int, image_path=detector_path
+                        box1=black_corners_int, image_path=detector_img
                     )
                     result_img, kid = analyzer.analyze(pixel_per_cm=pixel_per_cm)
-                    result_path = rf"kid\{uid}\{img_id}_result.jpg"
+                    # result_path = rf"kid\{uid}\{img_id}_result.jpg"
+                    result_path = os.path.join('kid', uid, f'{img_id}_result.jpg')
                     cv2.imwrite(result_path, result_img)
                 if kid is not None:
                     if kid < 0.6:

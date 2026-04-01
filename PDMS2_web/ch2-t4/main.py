@@ -38,7 +38,7 @@ def main():
     if len(sys.argv) > 2:
         uid = sys.argv[1]
         img_id = sys.argv[2]
-        image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join('kid', uid, f"{img_id}.jpg")
     else:
         print("參數不足，需要 uid 與 img_id", file=sys.stderr)
         return_score(0)
@@ -64,9 +64,9 @@ def main():
         result_img = img  # 至少把原圖當成結果圖
 
     # ========= 5) 準備輸出路徑：kid\<uid>\<img_id>_result.jpg =========
-    result_dir = rf"kid\{uid}"
+    result_dir = os.path.join('kid',uid)
     os.makedirs(result_dir, exist_ok=True)
-    out_path = rf"{result_dir}\{img_id}_result.jpg"
+    out_path = os.path.join(result_dir, f"{img_id}_result.jpg")
 
     # 沒有 result_img 的話就存原圖
     to_save = result_img if result_img is not None else img

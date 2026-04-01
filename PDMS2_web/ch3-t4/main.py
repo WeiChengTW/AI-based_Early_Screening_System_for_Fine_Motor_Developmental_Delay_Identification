@@ -174,8 +174,12 @@ if __name__ == "__main__":
         img_id = sys.argv[2]
         # uid = "1125"
         # img_id = "ch3-t3"
-        image_path = rf"kid\{uid}\{img_id}.jpg"
-        result_path = rf"kid\{uid}\{img_id}_result.jpg"
+        # image_path = rf"kid\{uid}\{img_id}.jpg"
+        image_path = os.path.join('kid', uid, f'{img_id}.jpg')
+        
+
+        # result_path = rf"kid\{uid}\{img_id}_result.jpg"
+        result_path = os.path.join('kid', uid, f'{img_id}_result.jpg')
 
     # image_path = rf"PDMS2_web\kid\1125\ch3-t4.jpg"
     # result_path = rf"PDMS2_web\kid\1125\ch3-t4_result.jpg"

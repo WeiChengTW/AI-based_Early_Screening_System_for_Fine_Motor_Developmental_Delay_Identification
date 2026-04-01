@@ -1,9 +1,10 @@
 import cv2
 import numpy as np
+import os
 
 
-def BoxDistanceAnalyzer(img_path=None, output_path="ch3-t1\result"):
-    img = cv2.imread(img_path)
+def BoxDistanceAnalyzer(img_path=None, output_path=os.path.join("ch3-t1", "result")):
+    img = img_path
     if img is None:
         print("讀取圖片失敗，請確認檔案路徑正確！")
         return
@@ -81,8 +82,8 @@ def BoxDistanceAnalyzer(img_path=None, output_path="ch3-t1\result"):
                 2,
             )
 
-            name = img_path.split("\\")[-1].split("_")[0]
-            path = f"{output_path}/{name}.png"
+            # name = img_path.split("\\")[-1].split("_")[0]
+            path = os.path.join(output_path, "ch3-t1", f"_result.png")
             cv2.imwrite(path, img)
 
         print(f"結果已儲存為 '{path}'")
