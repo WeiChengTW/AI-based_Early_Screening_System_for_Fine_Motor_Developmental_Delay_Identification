@@ -10,6 +10,10 @@ import numpy as np
 import sys
 import os
 from datetime import datetime
+from paper_contour_model import detect_paper_contour_by_model
+
+
+DEFAULT_STANDARD_IMAGE = os.path.join(os.path.dirname(__file__), "standard.jpg")
 
 
 def capture_from_camera(camera_index=0):
@@ -115,81 +119,41 @@ def measure_paper_area_from_image(img):
 
     print(f"圖片尺寸: {img.shape[1]} x {img.shape[0]}")
 
-    # 2. 影像預處理
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    # 二值化 (使用 OTSU 自動找閾值)
-    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    # 顯示二值化結果 (方便調試)
-    cv2.imshow("Threshold Image", thresh)
-
-    # 3. 尋找輪廓
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    if not contours:
-        print("錯誤: 未偵測到任何輪廓")
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+    # 2. 使用模型偵測紙張輪廓
+    try:
+        contour, _, mask_area, model_path = detect_paper_contour_by_model(img)
+    except FileNotFoundError as e:
+        print(f"錯誤: {e}")
         return None
 
-    print(f"找到 {len(contours)} 個輪廓")
+    if mask_area <= 0:
+        print("錯誤: 模型未偵測到有效 paper mask")
+        return None
 
-    # 4. 找出最符合紙張特徵的輪廓
-    valid_contours = []
-
-    for i, cnt in enumerate(contours):
-        area = cv2.contourArea(cnt)
-
-        # 濾除太小的雜訊 (面積小於 1000)
-        if area < 1000:
-            continue
-
-        # 計算矩形充滿度 (Extent)
-        x, y, w, h = cv2.boundingRect(cnt)
+    area = float(mask_area)
+    if contour is not None:
+        x, y, w, h = cv2.boundingRect(contour)
         rect_area = w * h
-        extent = float(area) / rect_area
+        extent = float(cv2.contourArea(contour)) / rect_area if rect_area > 0 else 0.0
+        aspect_ratio = float(w) / h if h > 0 else 0.0
+        bbox = (x, y, w, h)
+    else:
+        h_img, w_img = img.shape[:2]
+        extent = 0.0
+        aspect_ratio = 0.0
+        bbox = (0, 0, w_img, h_img)
+        print("警告: 取得 mask 面積但無輪廓，僅顯示整張圖包圍框。")
 
-        # 計算縱橫比 (Aspect Ratio)
-        aspect_ratio = float(w) / h if h > 0 else 0
+    print(f"使用模型輪廓: {model_path}")
+    print(f"mask 面積像素數: {mask_area}")
 
-        print(f"\n輪廓 {i}:")
-        print(f"  面積: {area:.0f}")
-        print(f"  矩形充滿度: {extent:.3f}")
-        print(f"  縱橫比: {aspect_ratio:.3f}")
-        print(f"  包圍框: {w} x {h}")
-
-        # 紙張通常是矩形，Extent > 0.65
-        if extent > 0.65:
-            valid_contours.append(
-                {
-                    "contour": cnt,
-                    "area": area,
-                    "extent": extent,
-                    "aspect_ratio": aspect_ratio,
-                    "bbox": (x, y, w, h),
-                }
-            )
-
-    if not valid_contours:
-        print("\n警告: 找不到符合矩形特徵的輪廓，顯示所有大型輪廓供參考")
-        # 顯示所有面積大於 1000 的輪廓
-        for i, cnt in enumerate(contours):
-            area = cv2.contourArea(cnt)
-            if area > 1000:
-                valid_contours.append(
-                    {
-                        "contour": cnt,
-                        "area": area,
-                        "extent": 0,
-                        "aspect_ratio": 0,
-                        "bbox": cv2.boundingRect(cnt),
-                    }
-                )
-
-    # 5. 選擇面積最大的輪廓作為標準紙張
-    best_match = max(valid_contours, key=lambda x: x["area"])
+    best_match = {
+        "contour": contour,
+        "area": area,
+        "extent": extent,
+        "aspect_ratio": aspect_ratio,
+        "bbox": bbox,
+    }
 
     print(f"\n=== 選定的標準紙張 ===")
     print(f"面積: {best_match['area']:.0f} 像素²")
@@ -199,12 +163,9 @@ def measure_paper_area_from_image(img):
     # 6. 視覺化結果
     display_img = img.copy()
 
-    # 繪製所有候選輪廓 (淡藍色)
-    for candidate in valid_contours:
-        cv2.drawContours(display_img, [candidate["contour"]], -1, (255, 200, 100), 2)
-
-    # 繪製最佳匹配 (綠色粗線)
-    cv2.drawContours(display_img, [best_match["contour"]], -1, (0, 255, 0), 4)
+    # 繪製模型輪廓 (綠色粗線)
+    if best_match["contour"] is not None:
+        cv2.drawContours(display_img, [best_match["contour"]], -1, (0, 255, 0), 4)
 
     # 繪製包圍框 (紅色)
     x, y, w, h = best_match["bbox"]
@@ -212,15 +173,15 @@ def measure_paper_area_from_image(img):
 
     # 添加文字說明
     text = f"Area: {best_match['area']:.0f}"
-    cv2.rectangle(display_img, (x, y - 40), (x + w, y), (0, 0, 0), -1)
+    cv2.rectangle(display_img, (0, 0), (220, 36), (0, 0, 0), -1)
     cv2.putText(
         display_img,
         text,
-        (x + 10, y - 10),
+        (10, 24),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
+        0.6,
         (255, 255, 255),
-        2,
+        1,
     )
 
     # 縮放顯示 (避免圖片太大)
@@ -402,20 +363,13 @@ if __name__ == "__main__":
             # 測量多張圖片並計算平均
             measure_multiple_images(image_paths)
 
-    # 顯示使用說明
+    # 無參數時，直接讀取 ch3-t4/standard.jpg
     else:
-        print("使用方式:")
-        print("  1. 攝影機拍攝模式:")
-        print("     python measure_standard_area.py --camera [拍攝次數]")
-        print("     範例: python measure_standard_area.py --camera 3")
-        print()
-        print("  2. 測量單張圖片:")
-        print("     python measure_standard_area.py <圖片路徑>")
-        print("     範例: python measure_standard_area.py standard_paper.jpg")
-        print()
-        print("  3. 測量多張圖片:")
-        print("     python measure_standard_area.py <圖片1> <圖片2> <圖片3> ...")
-        print(
-            "     範例: python measure_standard_area.py paper1.jpg paper2.jpg paper3.jpg"
-        )
-        sys.exit(1)
+        print(f"未提供參數，改為直接讀取: {DEFAULT_STANDARD_IMAGE}")
+        if not os.path.exists(DEFAULT_STANDARD_IMAGE):
+            print(f"錯誤: 找不到檔案 {DEFAULT_STANDARD_IMAGE}")
+            sys.exit(1)
+
+        area = measure_paper_area(DEFAULT_STANDARD_IMAGE)
+        if area is not None:
+            print(f"\n建議使用的 STANDARD_AREA = {int(area)}")

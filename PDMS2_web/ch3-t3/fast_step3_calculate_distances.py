@@ -60,7 +60,7 @@ def fast_calculate_distances(image_path, output_path=None):
         return None
 
     # 大幅簡化輪廓
-    epsilon = 0.02 * cv2.arcLength(paper_contour, True)  # 增加簡化程度
+    epsilon = 0.005 * cv2.arcLength(paper_contour, True)  # 降低簡化誤差
     simplified_contour = cv2.approxPolyDP(paper_contour, epsilon, True)
     print(f"    輪廓簡化: {len(paper_contour)} -> {len(simplified_contour)} 點")
 
@@ -71,10 +71,10 @@ def fast_calculate_distances(image_path, output_path=None):
         return None
 
     # 繪製紙張輪廓（藍色）
-    cv2.drawContours(result_image, [paper_contour], -1, (255, 0, 0), 3)
+    cv2.drawContours(result_image, [paper_contour], -1, (255, 0, 0), 1)
 
     # 繪製1/4 A4矩形（綠色）
-    cv2.polylines(result_image, [quarter_a4_corners], True, (0, 255, 0), 3)
+    cv2.polylines(result_image, [quarter_a4_corners], True, (0, 255, 0), 1)
 
     # 快速計算邊線距離
     edge_distances = optimized_rectangle_to_contour_distance(
@@ -101,7 +101,7 @@ def fast_calculate_distances(image_path, output_path=None):
         tuple(mid_edge.astype(int)),
         tuple(mid_edge.astype(int)),
         (0, 165, 255),
-        8,
+        2,
     )
     cv2.putText(
         result_image,
@@ -115,7 +115,7 @@ def fast_calculate_distances(image_path, output_path=None):
 
     # 最大角點距離（紫線）
     corner = quarter_a4_corners[max_corner_idx]
-    cv2.circle(result_image, tuple(corner), 10, (255, 0, 255), -1)
+    cv2.circle(result_image, tuple(corner), 4, (255, 0, 255), -1)
     cv2.putText(
         result_image,
         f"Max Corner: {corner_distances[max_corner_idx]/pixels_per_cm:.2f}cm",

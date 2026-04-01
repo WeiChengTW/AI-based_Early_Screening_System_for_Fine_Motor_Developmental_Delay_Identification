@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import os
+from paper_contour_model import detect_paper_contour_by_model
 
 
 def judge_score(target_img_path, standard_area):
@@ -14,50 +15,32 @@ def judge_score(target_img_path, standard_area):
         print(f"錯誤: 無法讀取圖片 {target_img_path}")
         return None
 
-    # 2. 影像預處理
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    # 2. 使用模型偵測紙張輪廓
+    try:
+        best_cnt, _, mask_area, model_path = detect_paper_contour_by_model(img)
+    except FileNotFoundError as e:
+        return {"error": str(e), "img": img}
 
-    # 二值化 (使用 OTSU 自動找閾值)
-    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    if mask_area <= 0:
+        return {"error": "模型未偵測到有效 paper mask", "img": img}
 
-    # 3. 尋找輪廓
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    best_area = float(mask_area)
 
-    if not contours:
-        return {"error": "未偵測到任何輪廓", "img": img}
-
-    # --- 關鍵改良：智慧過濾 (Smart Filter) ---
-    # 目標：找出「面積夠大」且「形狀像矩形」的輪廓，避開不規則的光斑
-    best_cnt = None
-    best_area = 0
-
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-
-        # 濾除太小的雜訊
-        if area < 1000:
-            continue
-
-        # 計算矩形充滿度 (Extent)
-        x, y, w, h = cv2.boundingRect(cnt)
-        rect_area = w * h
-        extent = float(area) / rect_area
-
-        # 紙張通常是矩形，Extent 會比較高 (設定 > 0.65 比較保險，允許稍微剪歪)
-        # 反光通常是不規則形狀，Extent 會較低
-        if extent > 0.65:
-            if area > best_area:
-                best_area = area
-                best_cnt = cnt
-
-    # 如果都沒找到像矩形的，只好退而求其次找最大的 (並標記警告)
+    # 輕量矩形檢查僅作提示，不再作為輪廓來源
     is_rectangular = True
-    if best_cnt is None:
-        print("警告：找不到矩形物體，可能反光嚴重或紙張變形，使用最大輪廓代替。")
-        best_cnt = max(contours, key=cv2.contourArea)
-        best_area = cv2.contourArea(best_cnt)
+    if best_cnt is not None:
+        x, y, w, h = cv2.boundingRect(best_cnt)
+        rect_area = w * h
+        extent = float(cv2.contourArea(best_cnt)) / rect_area if rect_area > 0 else 0.0
+        if extent <= 0.65:
+            is_rectangular = False
+            print("警告：模型輪廓矩形充滿度偏低，請確認拍攝角度/遮擋。")
+    else:
         is_rectangular = False
+        print("警告：僅取得 mask 面積，無法繪製輪廓。")
+
+    print(f"使用模型輪廓: {model_path}")
+    print(f"mask 面積像素數: {mask_area}")
 
     # 4. 計算比例與評分
     ratio = best_area / standard_area
@@ -122,16 +105,16 @@ def show_result(result_data):
         # 2. 準備顯示文字
         text_info = f"{desc} | Ratio: {ratio:.2f}"
 
-        # 為了讓文字清楚，加個黑色背景條
-        cv2.rectangle(display_img, (x, y - 40), (x + w, y), (0, 0, 0), -1)
+        # 為了讓文字清楚，加個左上角黑色背景條
+        cv2.rectangle(display_img, (0, 0), (360, 36), (0, 0, 0), -1)
         cv2.putText(
             display_img,
             text_info,
-            (x, y - 10),
+            (10, 24),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
+            0.6,
             (255, 255, 255),
-            2,
+            1,
         )
 
     # 3. 縮放顯示 (避免圖片太大超出螢幕)
@@ -159,7 +142,7 @@ def show_result(result_data):
 # --- 主程式執行區 ---
 
 # 1. 設定基準面積 (請填入你之前測得的數值)
-STANDARD_AREA = 760170
+STANDARD_AREA = 17224
 
 # 2. 指定圖片路徑
 for i in range(1, 7):

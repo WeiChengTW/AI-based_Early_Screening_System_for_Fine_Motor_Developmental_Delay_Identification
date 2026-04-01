@@ -63,49 +63,39 @@ def detect_aruco_and_draw_quarter_a4(image_path, output_path=None, aruco_size_cm
 
         print(f"1/4 A4尺寸: {quarter_a4_width_px} x {quarter_a4_height_px} pixels")
 
-        # 計算ArUco的方向（使用前兩個頂點計算角度）
-        vector = aruco_corners[1] - aruco_corners[0]
-        angle = np.arctan2(vector[1], vector[0])
+        # 以 ArUco 的兩條邊作為基底向量，確保方框四邊與 ArUco 邊平行
+        width_vec = aruco_corners[1] - aruco_corners[0]
+        height_vec = aruco_corners[3] - aruco_corners[0]
 
-        # 定義1/4 A4矩形的四個角點（相對於ArUco中心）
-        half_width = quarter_a4_width_px / 2
-        half_height = quarter_a4_height_px / 2
+        width_len = np.linalg.norm(width_vec)
+        height_len = np.linalg.norm(height_vec)
+        if width_len < 1e-6 or height_len < 1e-6:
+            print("ArUco 邊長異常，無法建立標準方框")
+            return None, None, result_image
 
-        # 原始矩形角點（未旋轉）
-        rect_points = np.array(
-            [
-                [-half_width, -half_height],
-                [half_width, -half_height],
-                [half_width, half_height],
-                [-half_width, half_height],
-            ],
-            dtype=np.float32,
+        width_dir = width_vec / width_len
+        height_dir = height_vec / height_len
+
+        half_width_vec = width_dir * (quarter_a4_width_px / 2.0)
+        half_height_vec = height_dir * (quarter_a4_height_px / 2.0)
+        center = np.array([center_x, center_y], dtype=np.float32)
+
+        top_left = center - half_width_vec - half_height_vec
+        top_right = center + half_width_vec - half_height_vec
+        bottom_right = center + half_width_vec + half_height_vec
+        bottom_left = center - half_width_vec + half_height_vec
+
+        quarter_a4_corners = np.array(
+            [top_left, top_right, bottom_right, bottom_left], dtype=np.int32
         )
-
-        # 旋轉矩陣
-        cos_a = np.cos(angle)
-        sin_a = np.sin(angle)
-        rotation_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
-
-        # 旋轉並平移到ArUco中心
-        rotated_points = []
-        for point in rect_points:
-            rotated_point = rotation_matrix @ point
-            final_point = [
-                int(center_x + rotated_point[0]),
-                int(center_y + rotated_point[1]),
-            ]
-            rotated_points.append(final_point)
-
-        quarter_a4_corners = np.array(rotated_points, dtype=np.int32)
 
         # 繪製ArUco標記（紅色框線）
         cv2.aruco.drawDetectedMarkers(result_image, corners, ids)
 
         # 繪製1/4 A4矩形（綠色框線）
         cv2.polylines(
-            result_image, [quarter_a4_corners], True, (0, 255, 0), 3
-        )  # 綠色，線寬3
+            result_image, [quarter_a4_corners], True, (0, 255, 0), 1
+        )  # 綠色，線寬1
 
         # 添加文字說明
         cv2.putText(

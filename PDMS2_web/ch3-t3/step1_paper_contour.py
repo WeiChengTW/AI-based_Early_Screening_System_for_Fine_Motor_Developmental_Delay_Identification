@@ -1,9 +1,42 @@
 import cv2
 import numpy as np
 import os
+from pathlib import Path
+from ultralytics import YOLO
 
 
-def detect_paper_contour(image_path, output_path=None):
+_MODEL_CACHE = {}
+
+
+def _resolve_weights_path(weights_path=None):
+    if weights_path is not None:
+        candidate = Path(weights_path)
+        if candidate.exists():
+            return candidate
+
+    current_dir = Path(__file__).resolve().parent
+    local_model = current_dir / "models" / "best.pt"
+    if local_model.exists():
+        return local_model
+
+    return None
+
+
+def _load_model(weights_path=None):
+    resolved = _resolve_weights_path(weights_path)
+    if resolved is None:
+        raise FileNotFoundError("找不到 ch3-t3 的模型權重 best.pt")
+
+    key = str(resolved)
+    if key not in _MODEL_CACHE:
+        _MODEL_CACHE[key] = YOLO(key)
+
+    return _MODEL_CACHE[key], resolved
+
+
+def detect_paper_contour(
+    image_path, output_path=None, conf=0.5, device=None, weights_path=None
+):
     """
     檢測紙張輪廓並用藍線畫出
     """
@@ -13,54 +46,53 @@ def detect_paper_contour(image_path, output_path=None):
         print(f"無法讀取圖片: {image_path}")
         return None, None
 
-    # 複製原圖用於繪製結果
     result_image = image.copy()
 
-    # 轉換為灰度圖
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    try:
+        model, resolved_path = _load_model(weights_path)
+    except FileNotFoundError as e:
+        print(str(e))
+        return None, result_image
 
-    # 使用雙邊濾波保持邊緣清晰的同時去噪
-    filtered = cv2.bilateralFilter(gray, 11, 80, 80)
+    results = model.predict(source=image, conf=conf, device=device, verbose=False)
+    if not results:
+        print("模型未返回偵測結果")
+        return None, result_image
 
-    # 自適應閾值處理
-    adaptive_thresh = cv2.adaptiveThreshold(
-        filtered, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+    result = results[0]
+    if result.masks is None or len(result.masks.data) == 0:
+        print("模型未檢測到 paper mask")
+        return None, result_image
+
+    if result.boxes is not None and len(result.boxes) > 0:
+        mask_idx = int(np.argmax(result.boxes.conf.cpu().numpy()))
+    else:
+        mask_areas = result.masks.data.cpu().numpy().sum(axis=(1, 2))
+        mask_idx = int(np.argmax(mask_areas))
+
+    mask = result.masks.data[mask_idx].cpu().numpy()
+    mask = (mask > 0.5).astype(np.uint8) * 255
+
+    if mask.shape[:2] != image.shape[:2]:
+        mask = cv2.resize(mask, (image.shape[1], image.shape[0]), cv2.INTER_NEAREST)
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        print("paper mask 無法轉換為輪廓")
+        return None, result_image
+
+    paper_contour = max(contours, key=cv2.contourArea)
+    cv2.drawContours(result_image, [paper_contour], -1, (255, 0, 0), 1)
+
+    print(
+        f"檢測到 paper mask 輪廓，包含 {len(paper_contour)} 個輪廓點，模型: {resolved_path}"
     )
 
-    # Canny邊緣檢測，使用較低的閾值獲取更多細節
-    edges = cv2.Canny(filtered, 30, 80)
+    if output_path:
+        cv2.imwrite(output_path, result_image)
+        print(f"結果已保存到: {output_path}")
 
-    # 形態學操作，連接斷開的邊緣但保持輪廓精度
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
-    edges = cv2.morphologyEx(edges, cv2.MORPH_DILATE, kernel, iterations=1)
-
-    # 尋找輪廓，使用CHAIN_APPROX_NONE保持所有輪廓點
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-    # 找到最大的輪廓（假設為紙張）
-    if contours:
-        largest_contour = max(contours, key=cv2.contourArea)
-
-        # 使用精確的輪廓，不進行多邊形近似
-        paper_contour = largest_contour
-
-        # 在結果圖像上畫藍色輪廓線（精確輪廓）
-        cv2.drawContours(
-            result_image, [paper_contour], -1, (255, 0, 0), 3
-        )  # 藍色，線寬3
-
-        print(f"檢測到紙張輪廓，包含 {len(paper_contour)} 個輪廓點")
-
-        # 保存結果圖片
-        if output_path:
-            cv2.imwrite(output_path, result_image)
-            print(f"結果已保存到: {output_path}")
-
-        return paper_contour, result_image
-    else:
-        print("未檢測到紙張輪廓")
-        return None, result_image
+    return paper_contour, result_image
 
 
 def main():
