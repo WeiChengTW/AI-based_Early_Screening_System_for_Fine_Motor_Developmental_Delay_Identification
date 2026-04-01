@@ -1,44 +1,70 @@
 import cv2
 import numpy as np
+import torch
 from ultralytics import YOLO
 import sys
-from pathlib import Path
 import os
+from pathlib import Path
+from segment_anything import sam_model_registry, SamPredictor
 
+# ================== 模型與環境設定 ==================
+device = "cuda" if torch.cuda.is_available() else "cpu"
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "toybrick.pt"
+SAM_CHECKPOINT = BASE_DIR / "sam_vit_b_01ec64.pth"
+SAM_TYPE = "vit_b"
+
+print(f"[DEBUG] 目前使用設備: {device}", flush=True)
+
+# 初始化 YOLO
+try:
+    print(f"[DEBUG] 開始加載 YOLO 模型: {MODEL_PATH}", flush=True)
+    yolo_model = YOLO(str(MODEL_PATH))
+    print("[DEBUG] YOLO 模型加載完成", flush=True)
+except Exception as e:
+    print(f"[ERROR] YOLO 模型加載失敗：{e}", flush=True)
+    sys.exit(1)
+
+# 初始化 SAM
+try:
+    print(f"[DEBUG] 開始加載 SAM 模型: {SAM_CHECKPOINT}", flush=True)
+    sam = sam_model_registry[SAM_TYPE](checkpoint=str(SAM_CHECKPOINT)).to(device)
+    sam_predictor = SamPredictor(sam)
+    print("[DEBUG] SAM 模型加載完成", flush=True)
+except Exception as e:
+    print(f"[ERROR] SAM 模型加載失敗：{e}", flush=True)
+    sys.exit(1)
 
 def return_score(score):
     sys.exit(int(score))
 
+# ================== 通用 SAM 輔助函數 ==================
+def get_sam_masks_from_boxes(frame, boxes):
+    """ 根據 YOLO 的 boxes 使用 SAM 生成高品質 Mask """
+    if len(boxes) == 0: return []
+    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    sam_predictor.set_image(img_rgb)
+    
+    sam_masks = []
+    for box in boxes:
+        m, _, _ = sam_predictor.predict(box=np.array(box), multimask_output=False)
+        sam_masks.append(m[0])
+    return sam_masks
 
-# ====================================================================
-# === 俯視圖 (TOP View) 分析函數
-# ====================================================================
-
+# ================== 俯視圖 (TOP View) 分析 ==================
 CONF_TOP = 0.6
 CROP_RATIO = 0.5
-GAP_RATIO = 1.2
-
 
 def analyze_image_top(frame, model):
-    """
-    分析俯視圖 (TOP View) 影像，檢查旋轉和偏移。
-    返回: (cropped_frame, summary_string, final_score)
-    """
-    # 確保 model 是 YOLO 物件
-    if isinstance(model, str):
-        model = YOLO(model)
-
-    H, W, _ = frame.shape
+    H, W = frame.shape[:2]
     crop_w, crop_h = int(W * CROP_RATIO), int(H * CROP_RATIO)
-    x1 = (W - crop_w) // 2
-    y1 = (H - crop_h) // 2
-    x2, y2 = x1 + crop_w, y1 + crop_h
+    x1, y1 = (W - crop_w) // 2, (H - crop_h) // 2
+    cropped = frame[y1:y1+crop_h, x1:x1+crop_w].copy()
 
-    cropped = frame[y1:y2, x1:x2].copy()
-
-    results = model.predict(source=cropped, conf=CONF_TOP, verbose=False, show=False)
-    masks = results[0].masks.data.cpu().numpy() if results[0].masks is not None else []
-
+    results = model.predict(source=cropped, conf=CONF_TOP, verbose=False)
+    yolo_boxes = results[0].boxes.xyxy.cpu().numpy() if results[0].boxes is not None else []
+    
+    masks = get_sam_masks_from_boxes(cropped, yolo_boxes)
     centers = []
     max_mask_side = 0
     rotate_ok_list = []
@@ -46,482 +72,131 @@ def analyze_image_top(frame, model):
 
     for mask in masks:
         binary_mask = (mask * 255).astype(np.uint8)
-        contours, _ = cv2.findContours(
-            binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-
+        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area < 300:
-                continue
-
+            if cv2.contourArea(cnt) < 300: continue
             x, y, w, h = cv2.boundingRect(cnt)
             max_mask_side = max(max_mask_side, max(w, h))
 
-            mask_H, mask_W = binary_mask.shape
-            scale_x = crop_w / mask_W
-            scale_y = crop_h / mask_H
-
             M = cv2.moments(cnt)
             if M["m00"] != 0:
-                cx = int(M["m10"] / M["m00"] * scale_x)
-                cy = int(M["m01"] / M["m00"] * scale_y)
+                cx, cy = int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
                 centers.append((cx, cy))
                 cv2.circle(cropped, (cx, cy), 5, (0, 0, 0), -1)
 
             if len(cnt) >= 5:
                 rect = cv2.minAreaRect(cnt)
-                box = cv2.boxPoints(rect)
-                box[:, 0] = box[:, 0] * scale_x
-                box[:, 1] = box[:, 1] * scale_y
-                box = np.intp(box)
-
-                max_len = -1
-                main_angle = 0
-                for i in range(4):
-                    pt1 = box[i]
-                    pt2 = box[(i + 1) % 4]
-                    dx = pt2[0] - pt1[0]
-                    dy = pt2[1] - pt1[1]
-                    length = dx**2 + dy**2
-                    angle = np.arctan2(dy, dx) * 180 / np.pi
-
-                    if length > max_len:
-                        max_len = length
-                        main_angle = angle
-
-                main_angle = abs(main_angle)
-                angle_diff_to_horizontal = abs(main_angle)
-                angle_diff_to_vertical = abs(main_angle - 90)
-
-                rotate_ok = (
-                    angle_diff_to_horizontal <= 10 or angle_diff_to_vertical <= 10
-                )
+                box = np.intp(cv2.boxPoints(rect))
+                edge1, edge2 = box[1] - box[0], box[2] - box[1]
+                angle = np.arctan2(edge1[1], edge1[0]) * 180 / np.pi if np.linalg.norm(edge1) > np.linalg.norm(edge2) else np.arctan2(edge2[1], edge2[0]) * 180 / np.pi
+                angle_diff = abs(angle) % 90
+                rotate_ok = (angle_diff <= 10 or angle_diff >= 80)
                 rotate_ok_list.append(rotate_ok)
-
-                color = (0, 255, 0) if rotate_ok else (0, 0, 255)
-                cv2.drawContours(cropped, [box], 0, color, 2)
+                cv2.drawContours(cropped, [box], 0, (0, 255, 0) if rotate_ok else (0, 0, 255), 2)
 
     offset = False
-    if len(centers) >= 2 and max_mask_side > 0:
+    if len(centers) >= 2:
         threshold = max_mask_side // 8
-        x_vals = [pt[0] for pt in centers]
-        y_vals = [pt[1] for pt in centers]
-        std_x = np.std(x_vals)
-        std_y = np.std(y_vals)
-        offset = std_x < threshold or std_y < threshold
+        offset = np.std([p[0] for p in centers]) < threshold or np.std([p[1] for p in centers]) < threshold
 
-        cv2.putText(
-            cropped,
-            f"std_x = {std_x:.2f}",
-            (30, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (255, 100, 100),
-            2,
-        )
-        cv2.putText(
-            cropped,
-            f"std_y = {std_y:.2f}",
-            (30, 70),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (100, 100, 255),
-            2,
-        )
-        cv2.putText(
-            cropped,
-            f"threshold = {threshold:.2f}",
-            (30, 100),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (100, 255, 100),
-            2,
-        )
-
-    status_rotate = "?"
-    is_rotate_ng = False
-    if rotate_ok_list:
-        if all(rotate_ok_list):
-            status_rotate = "No Rotate"
-        else:
-            status_rotate = "Rotate !"
-            is_rotate_ng = True
-
-    status_offset = "Offset !" if not offset else "No Offset"
-    is_offset_ng = not offset
-
-    summary = f"{status_offset} | {status_rotate}"
-
-    if is_offset_ng or is_rotate_ng:
-        GET_POINT = 1
-        color = (0, 0, 255)
-    else:
-        color = (0, 0, 0)
-
-    cv2.putText(cropped, summary, (230, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 3)
-
-    # ========== 顯示得分 ==========
-    score_text = f"Score: {GET_POINT}/2"
-    cv2.putText(
-        cropped,
-        score_text,
-        (10, cropped.shape[0] - 20),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1.2,
-        (0, 255, 255),
-        2,
-    )
-
+    is_rotate_ng = not all(rotate_ok_list) if rotate_ok_list else False
+    if not offset or is_rotate_ng: GET_POINT = 1
+    
+    summary = f"{'Offset !' if not offset else 'No Offset'} | {'Rotate !' if is_rotate_ng else 'No Rotate'}"
+    cv2.putText(cropped, summary, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0,0,255) if GET_POINT==1 else (0,0,0), 3)
     return cropped, summary, GET_POINT
 
-
-# ====================================================================
-# === 側視圖 (SIDE View) 分析函數 - 簡化版
-# ====================================================================
-
-CONF_SIDE = 0.6
-
+# ================== 側視圖 (SIDE View) 分析 ==================
+CONF_SIDE = 0.7
+GAP_RATIO = 0.9
 
 def analyze_image_side(IMG_PATH, model):
-    """
-    簡化版側視圖分析：
-    - 必須恰好偵測到 4 個積木
-    - 必須分成 2 層
-    - 每層恰好 2 個積木
-    - 有空隙 = 1 分，無空隙 = 0 分
-    """
-    # 確保 model 是 YOLO 物件
-    if isinstance(model, str):
-        model = YOLO(model)
-
     frame = cv2.imread(IMG_PATH)
-    if frame is None:
-        raise ValueError(f"讀不到圖片：{IMG_PATH}")
-
+    if frame is None: raise ValueError("讀圖失敗")
     frame = cv2.convertScaleAbs(frame, alpha=1.4, beta=10)
-    annotated_frame = frame.copy()
-    results = model.predict(source=frame, conf=CONF_SIDE, verbose=False, show=False)
-    r0 = results[0]
-
-    boxes = r0.boxes.xyxy.cpu().numpy() if r0.boxes is not None else np.empty((0, 4))
-
-    # 計算質心
+    annotated = frame.copy()
+    
+    results = model.predict(source=frame, conf=CONF_SIDE, verbose=False)
+    yolo_boxes = results[0].boxes.xyxy.cpu().numpy() if results[0].boxes is not None else []
+    masks = get_sam_masks_from_boxes(frame, yolo_boxes)
+    
     centroids = []
-    for box in boxes:
-        x1, y1, x2, y2 = box
-        cx = (x1 + x2) / 2
-        cy = (y1 + y2) / 2
-        centroids.append((cx, cy))
+    for i, mask in enumerate(masks):
+        mask_uint8 = (mask * 255).astype(np.uint8)
+        M = cv2.moments(mask_uint8)
+        color = np.random.randint(0, 255, (3,)).tolist()
+        annotated[mask] = annotated[mask] * 0.4 + np.array(color) * 0.6
+        if M["m00"] != 0:
+            cx, cy = M["m10"]/M["m00"], M["m01"]/M["m00"]
+            centroids.append((cx, cy))
+            cv2.circle(annotated, (int(cx), int(cy)), 8, (255, 255, 255), -1)
+            cv2.putText(annotated, f"ID:{i}", (int(cx), int(cy)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
 
-    num_blocks = len(boxes)
-    SCORE = 0
-
-    # ========== 繪製所有偵測到的框框 ==========
-    for i, box in enumerate(boxes):
-        x1, y1, x2, y2 = map(int, box)
-        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (255, 255, 255), 5)
-        cv2.putText(
-            annotated_frame,
-            f"Block {i+1}",
-            (x1, y1 - 5),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 255, 0),
-            1,
-        )
-
-    # ========== 第一階段：檢查積木數量 ==========
-    if num_blocks != 4:
-        msg = f"NG: Found {num_blocks} blocks (Need exactly 4)"
-        cv2.putText(
-            annotated_frame, msg, (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 3
-        )
-        cv2.putText(
-            annotated_frame,
-            f"Score: {SCORE}/2",
-            (10, annotated_frame.shape[0] - 20),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            2,
-            (0, 0, 255),
-            3,
-        )
-        return annotated_frame, SCORE
-
-    # ========== 第二階段：自動分層檢查 ==========
-    # 按 Y 座標排序
-    sorted_centroids = sorted(enumerate(centroids), key=lambda x: x[1][1])
-
-    # 計算平均積木高度，用於判斷是否為同一層
-    avg_block_height = np.mean([boxes[i][3] - boxes[i][1] for i in range(len(boxes))])
-    layer_threshold = avg_block_height * 0.3  # Y 座標差距小於此值視為同一層
+    if len(yolo_boxes) != 4:
+        cv2.putText(annotated, f"NG: Found {len(yolo_boxes)} blocks", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0,0,255), 3)
+        return annotated, 0
 
     # 自動分層
+    sorted_items = sorted(enumerate(centroids), key=lambda x: x[1][1])
+    avg_h = np.mean([b[3]-b[1] for b in yolo_boxes])
+    layer_threshold = avg_h * 0.3
     layers = []
-    current_layer = [sorted_centroids[0]]
-
-    for i in range(1, len(sorted_centroids)):
-        curr_idx, curr_centroid = sorted_centroids[i]
-        prev_idx, prev_centroid = current_layer[-1]
-
-        # 如果 Y 座標差距小，歸為同一層
-        if abs(curr_centroid[1] - prev_centroid[1]) < layer_threshold:
-            current_layer.append(sorted_centroids[i])
+    current_layer = [sorted_items[0]]
+    for i in range(1, len(sorted_items)):
+        if abs(sorted_items[i][1][1] - current_layer[-1][1][1]) < layer_threshold:
+            current_layer.append(sorted_items[i])
         else:
-            # 開新層
             layers.append(current_layer)
-            current_layer = [sorted_centroids[i]]
-
-    # 加入最後一層
+            current_layer = [sorted_items[i]]
     layers.append(current_layer)
 
-    # 檢查每層是否恰好 2 個積木
-    for i, layer in enumerate(layers):
-        if len(layer) != 2:
-            msg = f"NG: Layer {i+1} has {len(layer)} blocks (Need exactly 2)"
-            cv2.putText(
-                annotated_frame,
-                msg,
-                (20, 45),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                2,
-                (0, 0, 255),
-                3,
-            )
-            cv2.putText(
-                annotated_frame,
-                f"Score: {SCORE}/2",
-                (10, annotated_frame.shape[0] - 20),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                2,
-                (0, 0, 255),
-                3,
-            )
-            return annotated_frame, SCORE
+    if len(layers) != 2 or any(len(l) != 2 for l in layers):
+        cv2.putText(annotated, "NG: Layering Error", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0,0,255), 3)
+        return annotated, 0
 
-    # 提取兩層的索引和質心
-    layer1_indices = [item[0] for item in layers[0]]
-    layer2_indices = [item[0] for item in layers[1]]
-    layer1 = [centroids[i] for i in layer1_indices]
-    layer2 = [centroids[i] for i in layer2_indices]
+    # 空隙檢查與繪圖
+    l1_idx, l2_idx = [x[0] for x in layers[0]], [x[0] for x in layers[1]]
+    p1_a, p1_b = centroids[l1_idx[0]], centroids[l1_idx[1]]
+    p2_a, p2_b = centroids[l2_idx[0]], centroids[l2_idx[1]]
+    
+    l1_gap, l2_gap = abs(p1_a[0]-p1_b[0]), abs(p2_a[0]-p2_b[0])
+    avg_w = np.mean([b[2]-b[0] for b in yolo_boxes])
+    gap_threshold = avg_w * GAP_RATIO
+    l1_has, l2_has = l1_gap > gap_threshold, l2_gap > gap_threshold
 
-    # ========== 繪製分層標註 ==========
-    colors = [(255, 0, 0), (0, 0, 255)]  # 紅色=上層, 藍色=下層
+    if l1_has:
+        cv2.line(annotated, (int(p1_a[0]), int(p1_a[1])), (int(p1_b[0]), int(p1_b[1])), (0,0,255), 5)
+        cv2.putText(annotated, "GAP", (int((p1_a[0]+p1_b[0])/2), int((p1_a[1]+p1_b[1])/2)-10), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 3)
+    if l2_has:
+        cv2.line(annotated, (int(p2_a[0]), int(p2_a[1])), (int(p2_b[0]), int(p2_b[1])), (0,0,255), 5)
+        cv2.putText(annotated, "GAP", (int((p2_a[0]+p2_b[0])/2), int((p2_a[1]+p2_b[1])/2)-10), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 3)
 
-    for layer_idx, (layer, indices) in enumerate(
-        [(layer1, layer1_indices), (layer2, layer2_indices)]
-    ):
-        color = colors[layer_idx]
-        for i, centroid in enumerate(layer):
-            cx, cy = centroid
-            box_idx = indices[i]
-            x1, y1, x2, y2 = map(int, boxes[box_idx])
+    SCORE = 1 if (l1_has or l2_has) else 2
+    cv2.putText(annotated, f"{'GAP' if SCORE==1 else 'NO GAP'} | Score: {SCORE}/2", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0,255,0) if SCORE==2 else (0,165,255), 3)
+    return annotated, SCORE
 
-            # 繪製分層框框
-            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 8)
-            cv2.putText(
-                annotated_frame,
-                f"L{layer_idx+1}-{i+1}",
-                (x1, y2 + 20),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                color,
-                4,
-            )
-            cv2.circle(annotated_frame, (int(cx), int(cy)), 8, (255, 0, 0), -1)
-
-    # ========== 第三階段：檢查空隙 ==========
-    # 計算每層內兩個積木的 X 座標距離
-    layer1_x_gap = abs(layer1[0][0] - layer1[1][0])
-    layer2_x_gap = abs(layer2[0][0] - layer2[1][0])
-
-    avg_block_width = np.mean([boxes[i][2] - boxes[i][0] for i in range(len(boxes))])
-    gap_threshold = avg_block_width * GAP_RATIO  # 空隙閾值：大於 1.2 倍寬度視為有空隙
-
-    has_gap = layer1_x_gap > gap_threshold or layer2_x_gap > gap_threshold
-
-    # ========== 繪製空隙標註 ==========
-    if has_gap:
-        SCORE = 1
-        gap_msg = "GAP DETECTED"
-        gap_color = (0, 255, 255)
-
-        # 標註哪一層有空隙
-        if layer1_x_gap > gap_threshold:
-            mid_x = (layer1[0][0] + layer1[1][0]) / 2
-            mid_y = (layer1[0][1] + layer1[1][1]) / 2
-            cv2.line(
-                annotated_frame,
-                (int(layer1[0][0]), int(layer1[0][1])),
-                (int(layer1[1][0]), int(layer1[1][1])),
-                (0, 0, 255),
-                3,
-            )
-            cv2.putText(
-                annotated_frame,
-                "GAP",
-                (int(mid_x), int(mid_y)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (0, 0, 255),
-                2,
-            )
-
-        if layer2_x_gap > gap_threshold:
-            mid_x = (layer2[0][0] + layer2[1][0]) / 2
-            mid_y = (layer2[0][1] + layer2[1][1]) / 2
-            cv2.line(
-                annotated_frame,
-                (int(layer2[0][0]), int(layer2[0][1])),
-                (int(layer2[1][0]), int(layer2[1][1])),
-                (0, 0, 255),
-                3,
-            )
-            cv2.putText(
-                annotated_frame,
-                "GAP",
-                (int(mid_x), int(mid_y)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (0, 0, 255),
-                2,
-            )
-    else:
-        SCORE = 2
-        gap_msg = "NO GAP"
-        gap_color = (0, 255, 0)
-
-    # ========== 顯示最終結果 ==========
-    cv2.putText(
-        annotated_frame,
-        f"OK: 4 blocks, 2 layers",
-        (20, 45),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        2,
-        (0, 255, 0),
-        3,
-    )
-    cv2.putText(
-        annotated_frame, gap_msg, (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 2, gap_color, 3
-    )
-    cv2.putText(
-        annotated_frame,
-        f"Score: {SCORE}/2",
-        (10, annotated_frame.shape[0] - 20),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        2,
-        gap_color,
-        3,
-    )
-
-    return annotated_frame, SCORE
-
-
-# ====================================================================
-# === 主程式執行區塊
-# ====================================================================
-
+# ================== Main 執行區塊 ==================
 if __name__ == "__main__":
     print("[DEBUG] ch1-t4 main.py 開始執行", flush=True)
-
     if len(sys.argv) > 2:
-        uid = sys.argv[1]
-        img_id = sys.argv[2]
-
-        SIDE_IMG_PATH = os.path.join("kid", uid, f"{img_id}-side.jpg")
-        TOP_IMG_PATH = os.path.join("kid", uid, f"{img_id}-top.jpg")
-        print(f"[DEBUG] 側視圖存在: {os.path.exists(SIDE_IMG_PATH)}", flush=True)
-        print(f"[DEBUG] 俯視圖存在: {os.path.exists(TOP_IMG_PATH)}", flush=True)
-
-        BASE_DIR = Path(__file__).resolve().parent
-        MODEL_PATH = BASE_DIR / "toybrick.pt"
-        print(
-            f"[DEBUG] 模型路徑：{MODEL_PATH}, 存在：{MODEL_PATH.exists()}", flush=True
-        )
+        uid, img_id = sys.argv[1], sys.argv[2]
+        SIDE_PATH = os.path.join("kid", uid, f"{img_id}-side.jpg")
+        TOP_PATH = os.path.join("kid", uid, f"{img_id}-top.jpg")
     else:
-        print("請提供 uid 和 img_id 參數")
-        sys.exit(1)
+        print("缺少參數 uid, img_id", flush=True); sys.exit(1)
 
-    # --- 載入模型 ---
     try:
-        print("[DEBUG] 開始加載 YOLO 模型...", flush=True)
-        yolo_model = YOLO(str(MODEL_PATH))
-        print("[DEBUG] YOLO 模型加載完成", flush=True)
+        print(f"[DEBUG] 分析側視圖: {SIDE_PATH}", flush=True)
+        ann_side, s_side = analyze_image_side(SIDE_PATH, yolo_model)
+        cv2.imwrite(os.path.join("kid", uid, f"{img_id}-side_result.jpg"), ann_side)
+        
+        print(f"[DEBUG] 分析俯視圖: {TOP_PATH}", flush=True)
+        frame_top = cv2.imread(TOP_PATH)
+        ann_top, _, s_top = analyze_image_top(frame_top, yolo_model)
+        cv2.imwrite(os.path.join("kid", uid, f"{img_id}-top_result.jpg"), ann_top)
+
+        final = min([s for s in [s_side, s_top] if s != -1])
+        print(f"Final Score: {final}", flush=True)
+        return_score(final)
     except Exception as e:
-        print(f"錯誤：載入 YOLO 模型失敗 (路徑: {MODEL_PATH})。請確保檔案存在。{e}")
-
-    # --- 1. 執行側視圖分析 ---
-    score_side = -1
-    try:
-        annotated_side, score_side = analyze_image_side(SIDE_IMG_PATH, yolo_model)
-        print(f"側視圖 ({SIDE_IMG_PATH}) 得分: {score_side}")
-
-        side_result_path = os.path.join("kid", uid, f"{img_id}-side_result.jpg")
-        cv2.imwrite(side_result_path, annotated_side)
-        print(f"側視圖結果已儲存至: {side_result_path}")
-
-        # 顯示側視圖結果
-        # cv2.namedWindow('Side View Analysis', cv2.WINDOW_NORMAL)
-        # cv2.imshow('Side View Analysis', annotated_side)
-
-    except ValueError as e:
-        print(f"側視圖分析失敗: {e}")
-    except Exception as e:
-        print(f"側視圖分析時發生錯誤: {e}")
-
-    # --- 2. 執行俯視圖分析 ---
-    score_top = -1
-    try:
-        frame_top = cv2.imread(TOP_IMG_PATH)
-        if frame_top is None:
-            raise ValueError("讀取俯視圖失敗")
-
-        analyzed_top, summary, score_top = analyze_image_top(frame_top, yolo_model)
-        print(f"俯視圖 ({TOP_IMG_PATH}) 檢測結果: {summary}")
-        print(f"俯視圖得分: {score_top}")
-        # 顯示俯視圖結果
-        # cv2.namedWindow('Top View Analysis', cv2.WINDOW_NORMAL)
-        # cv2.imshow('Top View Analysis', analyzed_top)
-
-        top_result_path = os.path.join("kid", uid, f"{img_id}-top_result.jpg")
-        cv2.imwrite(top_result_path, analyzed_top)
-        print(f"俯視圖結果已儲存至: {top_result_path}")
-
-    except ValueError as e:
-        print(f"俯視圖分析失敗: {e}")
-    except Exception as e:
-        print(f"俯視圖分析時發生錯誤: {e}")
-
-    # --- 等待按鍵並關閉 ---
-    # print("\n[提示] 按下任意鍵以關閉預覽視窗並輸出分數...")
-    # cv2.waitKey(0)  # 這行會讓視窗卡住，直到你按鍵
-    # cv2.destroyAllWindows()
-
-    # --- 3. 輸出最低得分 ---
-    if score_side == 0 or score_top == 0:
-        print("\n總結：有一項分析得分為 0，最終得分為 0。")
-        return_score(0)
-
-    valid_scores = [s for s in [score_side, score_top] if s != -1]
-
-    if not valid_scores:
-        print("\n總結：兩項分析皆失敗或未執行，無法計算最低得分。")
-        final_score = -1
-    else:
-        final_score = min(valid_scores)
-        print(f"\n最終最低得分：{final_score}")
-
-    return_score(final_score if final_score != -1 else 0)
-
-    # # === test ===
-    # MODEL_PATH = r"toybrick.pt"
-
-    # for i in range(1, 5):
-
-    #     img_url = fr"{i}.jpg"
-    #     result, score = analyze_image_side(img_url, model=MODEL_PATH)
-    #     print(f'{img_url} : {score}')
-
-    #     result = cv2.resize(result, (0, 0), fx = 0.3, fy = 0.3)
-    #     cv2.imshow('result', result)
-    #     cv2.waitKey(0)
+        print(f"[ERROR] 執行失敗: {e}", flush=True); return_score(0)
