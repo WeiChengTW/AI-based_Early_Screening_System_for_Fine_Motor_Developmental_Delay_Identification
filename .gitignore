@@ -34,7 +34,7 @@
 *.h5
 
 # 不要把 YOLO 權重 best.pt 放進 Git
-best.pt
+# best.pt
 
 # 各關卡的 model 資料夾也全部忽略
 PDMS2_web/ch2-t1/model/
