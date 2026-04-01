@@ -1,7 +1,7 @@
 # run_admin.py
 # -*- coding: utf-8 -*-
 from pathlib import Path
-from flask import Flask, send_from_directory, request, jsonify, session
+from flask import Flask, send_from_directory, request, jsonify, session, redirect
 import threading
 from datetime import datetime, date
 import logging, uuid, os, secrets
@@ -204,6 +204,11 @@ def _handle_err(e):
 
 
 # 靜態檔案路由
+@app.route("/")
+def root_redirect():
+    return redirect("/html/admin_login.html")
+
+
 @app.route("/admin")
 @app.route("/admin.html")
 def admin_shortcut():
